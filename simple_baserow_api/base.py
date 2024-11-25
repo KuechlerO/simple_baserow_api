@@ -1,3 +1,9 @@
+from copy import deepcopy
+from typing import Any, Dict
+
+import requests
+import warnings
+
 """
 simple_baserow_api base module.
 
@@ -13,16 +19,8 @@ If you want to replace this with a Flask application run:
 and then choose `flask` as template.
 """
 
-import warnings
-
 # example constant variable
 NAME = "simple_baserow_api"
-
-
-from copy import deepcopy
-from typing import Any, Dict
-
-import requests
 
 
 def load_token(token_path) -> str:
@@ -93,7 +91,6 @@ class BaserowApi:
         data = resp.json()
         return data
 
-    # TODO: Test if https://phenotips.charite.de/api/database/rows/table/581/?page=2" as next includes field names
     def _get_rows_data(
         self,
         url=None,
