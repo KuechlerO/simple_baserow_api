@@ -66,6 +66,7 @@ class BaserowApi:
     """
     Baserow API class.
     """
+
     table_path = "api/database/rows/table"
     fields_path = "api/database/fields/table"
 
@@ -91,10 +92,16 @@ class BaserowApi:
         resp.raise_for_status()
         data = resp.json()
         return data
-    
 
     # TODO: Test if https://phenotips.charite.de/api/database/rows/table/581/?page=2" as next includes field names
-    def _get_rows_data(self, url=None, table_id=None, entry_id=None, user_field_names=False, paginated=False):
+    def _get_rows_data(
+        self,
+        url=None,
+        table_id=None,
+        entry_id=None,
+        user_field_names=False,
+        paginated=False,
+    ):
         """
         Get rows for a table.
         - url: URL to get the data from.
@@ -110,7 +117,7 @@ class BaserowApi:
         if entry_id and paginated:
             warnings.warn("entry_id is not paginated.")
             paginated = False
-        
+
         if url:
             get_rows_url = url
         elif table_id:
@@ -135,7 +142,9 @@ class BaserowApi:
                 raise RuntimeError(f"Could not get data from {get_rows_url}")
 
             if data["next"]:
-                return data["results"] + self._get_rows_data(url=data["next"], paginated=paginated)
+                return data["results"] + self._get_rows_data(
+                    url=data["next"], paginated=paginated
+                )
             return data["results"]
         else:
             return data
@@ -158,7 +167,7 @@ class BaserowApi:
             return resp_data["id"]
         else:
             raise RuntimeError(f"Malformed response {resp_data}")
-    
+
     def _create_rows(self, table_id, datas, user_field_names=False):
         create_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
         if user_field_names:
@@ -222,15 +231,15 @@ class BaserowApi:
 
     def _convert_selects(self, data, fields):
         """
-        Convert the values in a dataset to their corresponding IDs 
+        Convert the values in a dataset to their corresponding IDs
         based on field definitions.
 
         Example:
         data = {"status": "active", "tags": ["urgent", "important"]}
         fields = [
-            {"name": "status", "type": "single_select", "select_options": 
+            {"name": "status", "type": "single_select", "select_options":
                 [{"value": "active", "id": 1}, {"value": "inactive", "id": 2}], "read_only": False},
-            {"name": "tags", "type": "multiple_select", "select_options": 
+            {"name": "tags", "type": "multiple_select", "select_options":
                 [{"value": "urgent", "id": 1}, {"value": "important", "id": 2}], "read_only": False}
         ]
         converted_data = self._convert_selects(data, fields)
@@ -239,7 +248,7 @@ class BaserowApi:
         data_conv = deepcopy(data)
 
         def convert_option(v, opts):
-            """ 
+            """
             Return the id of the option with value v.
             """
             if isinstance(v, int):
@@ -272,7 +281,6 @@ class BaserowApi:
                     data_conv[field["name"]] = new_value
         return data_conv
 
-
     def get_fields(self, table_id):
         """
         Get fields for a table.
@@ -301,36 +309,43 @@ class BaserowApi:
             fields = self.get_writable_fields(table_id)
         else:
             fields = self.get_fields(table_id)
-        
+
         if user_field_names:
             names = {f["name"]: f for f in fields}
         else:
             names = {f'field_{f["id"]}': f for f in fields}
-        
-        data = self._get_rows_data(table_id=table_id, user_field_names=user_field_names, paginated=True)
+
+        data = self._get_rows_data(
+            table_id=table_id, user_field_names=user_field_names, paginated=True
+        )
 
         # Collect rows with their field names and values
         writable_data = {
-            d["id"]: {
-                k: format_value(v, names[k])
-                for k, v in d.items()
-                if k in names
-            }
+            d["id"]: {k: format_value(v, names[k]) for k, v in d.items() if k in names}
             for d in data
         }
 
         return writable_data
 
-    def get_entry(self, table_id, entry_id, linked=False, seen_tables=None, user_field_names=True):
+    def get_entry(
+        self, table_id, entry_id, linked=False, seen_tables=None, user_field_names=True
+    ):
         """
         Get a single entry from a table.
         Attention: ID is not included.
         """
-        data = self._get_rows_data(table_id=table_id, entry_id=entry_id, paginated=False, user_field_names=user_field_names)
+        data = self._get_rows_data(
+            table_id=table_id,
+            entry_id=entry_id,
+            paginated=False,
+            user_field_names=user_field_names,
+        )
         fields = self.get_fields(table_id)
         names = {f["name"]: f for f in fields}
         names = names | {f'field_{f["id"]}': f for f in fields}
-        formatted_data = {k: format_value(v, names[k]) for k, v in data.items() if k in names}
+        formatted_data = {
+            k: format_value(v, names[k]) for k, v in data.items() if k in names
+        }
 
         seen_tables_next = seen_tables or []
         seen_tables_next.append(table_id)
@@ -344,9 +359,14 @@ class BaserowApi:
                 if not seen_tables or linked_table_id not in seen_tables:
                     if ids := data.get(field["name"]):
                         formatted_data[field["name"]] = [
-                            self.get_entry(linked_table_id, e_id["id"], linked=False, 
-                                seen_tables=seen_tables_next, user_field_names=user_field_names) 
-                               for e_id in ids
+                            self.get_entry(
+                                linked_table_id,
+                                e_id["id"],
+                                linked=False,
+                                seen_tables=seen_tables_next,
+                                user_field_names=user_field_names,
+                            )
+                            for e_id in ids
                         ]
 
         return formatted_data
@@ -358,13 +378,19 @@ class BaserowApi:
         fields = self.get_fields(table_id)
         data_conv = self._convert_selects(data, fields)
         if row_id:
-            self._update_row(table_id, row_id, data_conv, user_field_names=user_field_names)
+            self._update_row(
+                table_id, row_id, data_conv, user_field_names=user_field_names
+            )
         else:
-            row_id = self._create_row(table_id, data_conv, user_field_names=user_field_names)
+            row_id = self._create_row(
+                table_id, data_conv, user_field_names=user_field_names
+            )
 
         return row_id
 
-    def add_data_batch(self, table_id, entries, user_field_names=True) -> tuple[list, list]:
+    def add_data_batch(
+        self, table_id, entries, user_field_names=True
+    ) -> tuple[list, list]:
         """
         Add multiple entries.
         """
@@ -380,13 +406,19 @@ class BaserowApi:
         touched_ids = []
         if entries_new:
             try:
-                touched_ids += self._create_rows(table_id, entries_new, user_field_names=user_field_names)
+                touched_ids += self._create_rows(
+                    table_id, entries_new, user_field_names=user_field_names
+                )
             except requests.HTTPError as err:
                 errors.append(f"Create rows ({len(entries_new)}): " + err.response.text)
         if entries_update:
             try:
-                touched_ids += self._update_rows(table_id, entries_update, user_field_names=user_field_names)
+                touched_ids += self._update_rows(
+                    table_id, entries_update, user_field_names=user_field_names
+                )
             except requests.HTTPError as err:
-                errors.append(f"Update rows ({len(entries_update)}): " + err.response.text)
-        
+                errors.append(
+                    f"Update rows ({len(entries_update)}): " + err.response.text
+                )
+
         return touched_ids, errors

@@ -14,7 +14,9 @@ def baserow_api():
     database_url = "https://phenotips.charite.de"
 
     # This fixture returns a dictionary with some data
-    bs_api_token = load_token("/Users/oliverkuchler/Programming/git_projects/baserow_token.txt")
+    bs_api_token = load_token(
+        "/Users/oliverkuchler/Programming/git_projects/baserow_token.txt"
+    )
     return BaserowApi(database_url, token=bs_api_token)
 
 
@@ -22,17 +24,35 @@ def baserow_api():
 def test_convert_option(baserow_api):
     data = {"status": "active", "tags": ["urgent", "important"]}
     fields = [
-        {"name": "status", "type": "single_select", "select_options": 
-            [{"value": "active", "id": 1}, {"value": "inactive", "id": 2}], "read_only": False},
-        {"name": "tags", "type": "multiple_select", "select_options": 
-            [{"value": "urgent", "id": 1}, {"value": "important", "id": 2}], "read_only": False}
+        {
+            "name": "status",
+            "type": "single_select",
+            "select_options": [
+                {"value": "active", "id": 1},
+                {"value": "inactive", "id": 2},
+            ],
+            "read_only": False,
+        },
+        {
+            "name": "tags",
+            "type": "multiple_select",
+            "select_options": [
+                {"value": "urgent", "id": 1},
+                {"value": "important", "id": 2},
+            ],
+            "read_only": False,
+        },
     ]
     converted_data = baserow_api._convert_selects(data, fields)
-    assert converted_data == {"status": 1, "tags": [1, 2]}, f"Converted data is {converted_data}"
+    assert converted_data == {
+        "status": 1,
+        "tags": [1, 2],
+    }, f"Converted data is {converted_data}"
 
 
 # --------- public methods ---------
 # ATTENTION: A lot of hard-coded IDs are used in the tests. These IDs need to be adjusted to the actual IDs in the database.
+
 
 def test_get_fields(baserow_api):
     table_id = 1053
@@ -52,11 +72,11 @@ def test_get_fields(baserow_api):
     assert 10215 in fields_ids, f"Fields are {fields}"
     assert 10216 in fields_ids, f"Fields are {fields}"
 
-
     # assert type is correct
     assert "text" in field_types, f"Fields are {fields}"
     assert "single_select" in field_types, f"Fields are {fields}"
     assert "number" in field_types, f"Fields are {fields}"
+
 
 def test_get_writable_fields(baserow_api):
     table_id = 1053
@@ -81,8 +101,11 @@ def test_get_writable_fields(baserow_api):
     assert "single_select" in field_types, f"Fields are {fields}"
     assert "number" in field_types, f"Fields are {fields}"
 
-    # Assert that 
-    assert all([field["read_only"] == False for field in fields]), f"Fields are {fields}"
+    # Assert that
+    assert all(
+        [field["read_only"] == False for field in fields]
+    ), f"Fields are {fields}"
+
 
 def test_get_data_writable1(baserow_api):
     table_id = 1053
@@ -97,6 +120,7 @@ def test_get_data_writable1(baserow_api):
     assert "Sample-ID" in data[1].keys(), f"Data is {data}"
     assert "76660_Ctr_BUD13" in data[1]["Sample-ID"], f"Data is {data}"
     assert "id" not in data[1].keys(), f"Data is {data}"
+
 
 def test_get_data_writable2(baserow_api):
     table_id = 1054
@@ -130,6 +154,7 @@ def test_get_data(baserow_api):
     # read_only
     assert "HGVS" in data[1].keys(), f"Data is {data}"
 
+
 def test_get_data_no_field_names(baserow_api):
     table_id = 1053
 
@@ -145,13 +170,17 @@ def test_get_data_no_field_names(baserow_api):
     assert "Sample-ID" not in data[1].keys(), f"Data is {data}"
     assert "field_10214" in data[1].keys(), f"Data is {data}"
 
+
 def test_get_entry(baserow_api):
     table_id = 1053
     entry_id = 1
 
     entry = baserow_api.get_entry(table_id, entry_id)
     assert "Sample-ID" in entry.keys(), f"Entry is {entry}"
-    assert "id" not in entry.keys(), f"Entry is {entry}"        # id should not be in the entry
+    assert (
+        "id" not in entry.keys()
+    ), f"Entry is {entry}"  # id should not be in the entry
+
 
 def test_add_data_add_simple_row(baserow_api):
     table_id = 1050
@@ -162,7 +191,7 @@ def test_add_data_add_simple_row(baserow_api):
         "Anmerkungen": "TestAnmerkungen",
         "Aktiv": True,
         "WebHook-Trigger": True,
-        "Zahl": 12
+        "Zahl": 12,
     }
     row_id = baserow_api.add_data(table_id, my_data, row_id=None, user_field_names=True)
 
@@ -179,6 +208,7 @@ def test_add_data_add_simple_row(baserow_api):
     except HTTPError as e:
         assert e.response.status_code == 404, f"Entry is {entry}"
 
+
 def test_add_data_add_simple_row(baserow_api):
     table_id = 1050
 
@@ -188,7 +218,7 @@ def test_add_data_add_simple_row(baserow_api):
         "Anmerkungen": "TestAnmerkungen",
         "Aktiv": True,
         "WebHook-Trigger": True,
-        "Zahl": 12
+        "Zahl": 12,
     }
     row_id = baserow_api.add_data(table_id, my_data, row_id=None, user_field_names=True)
 
@@ -204,19 +234,22 @@ def test_add_data_add_simple_row(baserow_api):
         entry = baserow_api.get_entry(table_id, row_id)
     except HTTPError as e:
         assert e.response.status_code == 404, f"Entry is {entry}"
+
 
 def test_add_data_add_row_no_user_fields(baserow_api):
     table_id = 1050
 
     # Add a simple row
     my_data = {
-        "field_10198": "Test-MedgenID",     # Medgen ID
-        "field_10199": "TestAnmerkungen",   # Anmerkungen
-        "field_10200": True,                      # Aktiv
-        "field_10201": True,            # WebHook-Trigger
-        "field_10206": 12                          # Zahl
+        "field_10198": "Test-MedgenID",  # Medgen ID
+        "field_10199": "TestAnmerkungen",  # Anmerkungen
+        "field_10200": True,  # Aktiv
+        "field_10201": True,  # WebHook-Trigger
+        "field_10206": 12,  # Zahl
     }
-    row_id = baserow_api.add_data(table_id, my_data, row_id=None, user_field_names=False)
+    row_id = baserow_api.add_data(
+        table_id, my_data, row_id=None, user_field_names=False
+    )
 
     # Check if the row was added
     entry = baserow_api.get_entry(table_id, row_id, user_field_names=False)
@@ -239,6 +272,7 @@ def test_add_data_add_row_no_user_fields(baserow_api):
     except HTTPError as e:
         assert e.response.status_code == 404, f"Entry is {entry}"
 
+
 def test_update_existing_row(baserow_api):
     table_id = 1050
     row_id = 1
@@ -246,7 +280,12 @@ def test_update_existing_row(baserow_api):
     entry = baserow_api.get_entry(table_id, row_id, user_field_names=True)
     assert entry["Medgen ID"] == "Eintrag1", f"Entry is {entry}"
 
-    returned_id = baserow_api.add_data(table_id, {"Medgen ID": "Eintrag1-geaendert"}, row_id=row_id, user_field_names=True)
+    returned_id = baserow_api.add_data(
+        table_id,
+        {"Medgen ID": "Eintrag1-geaendert"},
+        row_id=row_id,
+        user_field_names=True,
+    )
     assert returned_id == row_id, f"Returned ID is {returned_id}"
 
     # Check if the row was updated
@@ -254,9 +293,12 @@ def test_update_existing_row(baserow_api):
     assert entry["Medgen ID"] == "Eintrag1-geaendert", f"Entry is {entry}"
 
     # Reset the entry
-    baserow_api.add_data(table_id, {"Medgen ID": "Eintrag1"}, row_id=row_id, user_field_names=True)
+    baserow_api.add_data(
+        table_id, {"Medgen ID": "Eintrag1"}, row_id=row_id, user_field_names=True
+    )
     entry = baserow_api.get_entry(table_id, row_id, user_field_names=True)
     assert entry["Medgen ID"] == "Eintrag1", f"Entry is {entry}"
+
 
 def test_add_data_batch_only_new(baserow_api):
     table_id = 1050
@@ -264,19 +306,19 @@ def test_add_data_batch_only_new(baserow_api):
     # Batch of 2 rows
     my_data = [
         {
-        "Medgen ID": "Test-MedgenID1",
-        "Anmerkungen": "TestAnmerkungen",
-        "Aktiv": True,
-        "WebHook-Trigger": True,
-        "Zahl": 12
+            "Medgen ID": "Test-MedgenID1",
+            "Anmerkungen": "TestAnmerkungen",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 12,
         },
         {
-        "Medgen ID": "Test-MedgenID2",
-        "Anmerkungen": "TestAnmerkungen",
-        "Aktiv": True,
-        "WebHook-Trigger": True,
-        "Zahl": 12
-        }
+            "Medgen ID": "Test-MedgenID2",
+            "Anmerkungen": "TestAnmerkungen",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 12,
+        },
     ]
 
     # Add the data
@@ -286,13 +328,17 @@ def test_add_data_batch_only_new(baserow_api):
     data = baserow_api.get_data(table_id, writable_only=False)
     keys = data.keys()
     for entry in my_data:
-        assert entry["Medgen ID"] in [data[key]["Medgen ID"] for key in keys], f"Data is {data}"
-    
+        assert entry["Medgen ID"] in [
+            data[key]["Medgen ID"] for key in keys
+        ], f"Data is {data}"
+
     # Check also with row_ids
     for row_id in row_ids:
         entry = baserow_api.get_entry(table_id, row_id, user_field_names=True)
-        assert entry["Medgen ID"] in [entry["Medgen ID"] for entry in my_data], f"Entry is {entry}"
-    
+        assert entry["Medgen ID"] in [
+            entry["Medgen ID"] for entry in my_data
+        ], f"Entry is {entry}"
+
     # Delete the rows again
     for row_id in row_ids:
         baserow_api._delete_row(table_id, row_id)
@@ -302,6 +348,7 @@ def test_add_data_batch_only_new(baserow_api):
         except HTTPError as e:
             assert e.response.status_code == 404, f"Entry is {entry}"
 
+
 def test_add_data_batch_new_and_update(baserow_api):
     table_id = 1050
 
@@ -310,25 +357,25 @@ def test_add_data_batch_new_and_update(baserow_api):
         "Anmerkungen": "TestAnmerkungen_original",
         "Aktiv": True,
         "WebHook-Trigger": True,
-        "Zahl": 12
+        "Zahl": 12,
     }
-    
+
     # Batch of 2 rows
     my_update_data = [
         {
-        "Medgen ID": "EintragTest",
-        "Anmerkungen": "TestAnmerkungen_new",
-        "Aktiv": True,
-        "WebHook-Trigger": True,
-        "Zahl": 12
+            "Medgen ID": "EintragTest",
+            "Anmerkungen": "TestAnmerkungen_new",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 12,
         },
         {
-        "Medgen ID": "Test-MedgenID2",
-        "Anmerkungen": "TestAnmerkungen",
-        "Aktiv": True,
-        "WebHook-Trigger": True,
-        "Zahl": 13
-        }
+            "Medgen ID": "Test-MedgenID2",
+            "Anmerkungen": "TestAnmerkungen",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 13,
+        },
     ]
 
     # Add one entry
@@ -338,14 +385,17 @@ def test_add_data_batch_new_and_update(baserow_api):
     assert entry["Anmerkungen"] == my_original_data["Anmerkungen"], f"Entry is {entry}"
 
     # Add the update data
-    row_ids, _ = baserow_api.add_data_batch(table_id, my_update_data, user_field_names=True)
+    row_ids, _ = baserow_api.add_data_batch(
+        table_id, my_update_data, user_field_names=True
+    )
 
     # Check if the row was updated
     for k, row_id in enumerate(row_ids):
         entry = baserow_api.get_entry(table_id, row_id, user_field_names=True)
         assert entry["Medgen ID"] == my_update_data[k]["Medgen ID"], f"Entry is {entry}"
-        assert entry["Anmerkungen"] == my_update_data[k]["Anmerkungen"], f"Entry is {entry}"
-    
+        assert (
+            entry["Anmerkungen"] == my_update_data[k]["Anmerkungen"]
+        ), f"Entry is {entry}"
 
     # Delete the rows again
     for row_id in row_ids:
