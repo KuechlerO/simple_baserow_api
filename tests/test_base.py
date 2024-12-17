@@ -1,4 +1,5 @@
-from simple_baserow_api import BaserowApi, load_token, NAME
+# from simple_baserow_api import BaserowApi, load_token, NAME
+from ..simple_baserow_api import BaserowApi, load_token, NAME
 
 import pytest
 from requests.exceptions import HTTPError
@@ -396,6 +397,55 @@ def test_add_data_batch_new_and_update(baserow_api):
         assert (
             entry["Anmerkungen"] == my_update_data[k]["Anmerkungen"]
         ), f"Entry is {entry}"
+
+    # Delete the rows again
+    for row_id in row_ids:
+        baserow_api._delete_row(table_id, row_id)
+        # Check if the row was deleted
+        try:
+            entry = baserow_api.get_entry(table_id, row_id)
+        except HTTPError as e:
+            assert e.response.status_code == 404, f"Entry is {entry}"
+
+
+def test_add_data_batch_with_fail(baserow_api):
+    row_ids = []
+    table_id = 1050
+
+    new_data = [
+        # No formula
+        {
+            "Medgen ID": "EintragTest",
+            "Anmerkungen": "TestAnmerkungen_original",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 12,
+        },
+        # With formula
+        {
+            "Medgen ID": "EintragTest",
+            "Anmerkungen": "TestAnmerkungen_original",
+            "Aktiv": True,
+            "WebHook-Trigger": True,
+            "Zahl": 12,
+            "Formel": "TestFormel",
+        },
+    ]
+
+    # Add one entry
+    row_id = baserow_api.add_data_batch(
+        table_id, [new_data[0]], user_field_names=True, fail_on_error=False
+    )[0][0]
+    entry = baserow_api.get_entry(table_id, row_id)
+    row_ids.append(row_id)
+
+    with pytest.raises(Exception) as e_info:
+        # Add the same data again
+        row_ids.append(
+            baserow_api.add_data(
+                table_id, [new_data[1]], user_field_names=True, fail_on_error=True
+            )[0][0]
+        )
 
     # Delete the rows again
     for row_id in row_ids:

@@ -1,5 +1,4 @@
 from copy import deepcopy
-from typing import Any, Dict
 
 import requests
 import warnings
@@ -8,22 +7,13 @@ import warnings
 simple_baserow_api base module.
 
 This is the principal module of the simple_baserow_api project.
-here you put your main classes and objects.
-
-Be creative! do whatever you want!
-
-If you want to replace this with a Flask application run:
-
-    $ make init
-
-and then choose `flask` as template.
 """
 
 # example constant variable
 NAME = "simple_baserow_api"
 
 
-def load_token(token_path) -> str:
+def load_token(token_path: str) -> str:
     """
     Load a token from a file.
     """
@@ -32,7 +22,7 @@ def load_token(token_path) -> str:
     return token
 
 
-def format_value(raw_value, field_info):
+def format_value(raw_value: dict, field_info: dict) -> any:
     """
     Extract the value/id from a single_select, multiple_select or link_row field.
 
@@ -61,9 +51,7 @@ def format_value(raw_value, field_info):
 
 
 class BaserowApi:
-    """
-    Baserow API class.
-    """
+    """BaserowAPI class."""
 
     table_path = "api/database/rows/table"
     fields_path = "api/database/fields/table"
@@ -74,12 +62,16 @@ class BaserowApi:
             self._token = load_token(token_path)
         elif token:
             self._token = token
-        self._fields: Dict[int, Any] = {}
+        self._fields: dict[int, any] = {}
 
-    def _get_fields(self, table_id):
-        """
-        Get fields for a table.
-        return: json-encoded list of fields
+    def _get_fields(self, table_id: int) -> str:
+        """Get fields for a table.
+
+        Args:
+            table_id (int): ID of the table of interest.
+
+        Returns:
+            str: JSON encoded fields.
         """
         get_fields_url = f"{self._database_url}/{self.fields_path}/{table_id}/"
         resp = requests.get(
@@ -93,19 +85,23 @@ class BaserowApi:
 
     def _get_rows_data(
         self,
-        url=None,
-        table_id=None,
-        entry_id=None,
-        user_field_names=False,
-        paginated=False,
-    ):
-        """
-        Get rows for a table.
-        - url: URL to get the data from.
-        - table_id: ID of the table to get the data from.
-        - entry_id: ID of the (row) entry to get.
-        - user_field_names: Use user-friendly field names.
-        - paginated: Get all pages of data.
+        url: str = None,
+        table_id: int = None,
+        entry_id: int = None,
+        user_field_names: bool = False,
+        paginated: bool = False,
+    ) -> str:
+        """Get rows data from a table.
+
+        Args:
+            url (str, optional): URL to lookup data. Defaults to None.
+            table_id (int, optional): ID of table of interest. Defaults to None.
+            entry_id (int, optional): ID of entry of interest. Defaults to None.
+            user_field_names (bool, optional): Whether to use field names or field IDs. Defaults to False.
+            paginated (bool, optional): Whether to load multiple pages of data. Defaults to False.
+
+        Returns:
+            str: JSON encoded data.
         """
         if (not table_id and not url) or (table_id and url):
             raise RuntimeError("Either table_id or url must be provided, but not both.")
@@ -146,7 +142,19 @@ class BaserowApi:
         else:
             return data
 
-    def _create_row(self, table_id, data, user_field_names=False):
+    def _create_row(
+        self, table_id: int, data: dict, user_field_names: bool = False
+    ) -> int:
+        """Create a row in a table.
+
+        Args:
+            table_id (int): ID of the table of interest.
+            data (dict): Data to add to the table.
+            user_field_names (bool, optional): Whether to use field names of field IDs. Defaults to False.
+
+        Returns:
+            int: Row ID.
+        """
         create_row_url = f"{self._database_url}/{self.table_path}/{table_id}/"
         if user_field_names:
             create_row_url += "?user_field_names=true"
@@ -165,7 +173,9 @@ class BaserowApi:
         else:
             raise RuntimeError(f"Malformed response {resp_data}")
 
-    def _create_rows(self, table_id, datas, user_field_names=False):
+    def _create_rows(
+        self, table_id: int, datas: list[dict], user_field_names: bool = False
+    ):
         create_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
         if user_field_names:
             create_rows_url += "?user_field_names=true"
@@ -182,7 +192,9 @@ class BaserowApi:
         ids = [e["id"] for e in data["items"]]
         return ids
 
-    def _update_row(self, table_id, row_id, data, user_field_names=False):
+    def _update_row(
+        self, table_id: int, row_id: int, data: dict, user_field_names: bool = False
+    ):
         update_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
         if user_field_names:
             update_row_url += "?user_field_names=true"
@@ -201,7 +213,9 @@ class BaserowApi:
         else:
             raise RuntimeError(f"Malformed response {resp_data}")
 
-    def _update_rows(self, table_id, datas, user_field_names=False):
+    def _update_rows(
+        self, table_id: int, datas: list[dict], user_field_names: bool = False
+    ):
         update_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
         if user_field_names:
             update_rows_url += "?user_field_names=true"
@@ -218,7 +232,7 @@ class BaserowApi:
         ids = [e["id"] for e in data["items"]]
         return ids
 
-    def _delete_row(self, table_id, row_id):
+    def _delete_row(self, table_id: int, row_id: int):
         delete_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
         resp = requests.delete(
             delete_row_url,
@@ -278,29 +292,51 @@ class BaserowApi:
                     data_conv[field["name"]] = new_value
         return data_conv
 
-    def get_fields(self, table_id):
-        """
-        Get fields for a table.
+    def get_fields(self, table_id: int) -> list[dict]:
+        """Get all fields in a table.
         Fields are cached in the _fields attribute.
+
+        Args:
+            table_id (int): ID of the table of interest.
+
+        Returns:
+            list[dict]: List of fields in the table.
+
         TODO: Implement cache invalidation.
         """
         if table_id not in self._fields:
             self._fields[table_id] = self._get_fields(table_id)
         return self._fields[table_id]
 
-    def get_writable_fields(self, table_id):
-        """
-        Get fields which can be written to.
+    def get_writable_fields(self, table_id: int) -> list[dict]:
+        """Get all writable fields in a table.
+
+        Args:
+            table_id (int): ID of the table of interest.
+
+        Returns:
+            list[dict]: List of writable fields.
         """
         fields = self.get_fields(table_id)
         writable_fields = [field for field in fields if not field["read_only"]]
         return writable_fields
 
-    def get_data(self, table_id, writable_only=True, user_field_names=True):
+    def get_data(
+        self, table_id: int, writable_only: bool = True, user_field_names: bool = True
+    ) -> dict[int, dict[str, any]]:
         """Get all data in a table.
 
         writable_only - Only return fields which can be written to. This
         excludes all formula and computed fields.
+
+        Args:
+            table_id (int): ID of the table of interest.
+            writable_only (bool, optional): Only return fields which can be written to. This
+                excludes all formula and computed fields. Defaults to True.
+            user_field_names (bool, optional): _description_. Defaults to True.
+
+        Returns:
+            dict[int, dict[str, any]]: dictionary of data in the table.
         """
         if writable_only:
             fields = self.get_writable_fields(table_id)
@@ -325,11 +361,24 @@ class BaserowApi:
         return writable_data
 
     def get_entry(
-        self, table_id, entry_id, linked=False, seen_tables=None, user_field_names=True
-    ):
-        """
-        Get a single entry from a table.
-        Attention: ID is not included.
+        self,
+        table_id: int,
+        entry_id: int,
+        linked: bool = False,
+        seen_tables: list = None,
+        user_field_names: bool = True,
+    ) -> dict:
+        """Get a single entry from a table.
+
+        Args:
+            table_id (int): ID of the table of interest.
+            entry_id (int): Entry ID.
+            linked (bool, optional): Whether to fully hydrate the output with linked tables. Defaults to False.
+            seen_tables (list, optional): List of already linked tables. Defaults to None.
+            user_field_names (bool, optional): Whether to reference columns by name or ID. Defaults to True.
+
+        Returns:
+            dict: Entry data.
         """
         data = self._get_rows_data(
             table_id=table_id,
@@ -368,9 +417,23 @@ class BaserowApi:
 
         return formatted_data
 
-    def add_data(self, table_id, data, row_id=None, user_field_names=True) -> int:
-        """
-        Add/Change data (single row) to a table.
+    def add_data(
+        self,
+        table_id: int,
+        data: dict,
+        row_id: int = None,
+        user_field_names: bool = True,
+    ) -> int:
+        """Add/Change data to a table.
+
+        Args:
+            table_id (int): Table ID.
+            data (dict): Data to add/change.
+            row_id (int, optional): Row ID where to enter the data. Defaults to None.
+            user_field_names (bool, optional): Whether to reference columns by name or ID. Defaults to True.
+
+        Returns:
+            int: Row ID.
         """
         fields = self.get_fields(table_id)
         data_conv = self._convert_selects(data, fields)
@@ -386,11 +449,24 @@ class BaserowApi:
         return row_id
 
     def add_data_batch(
-        self, table_id, entries, user_field_names=True
+        self,
+        table_id: int,
+        entries: list[dict],
+        user_field_names: bool = True,
+        fail_on_error: bool = False,
     ) -> tuple[list, list]:
+        """Add/Change data (multiple rows) to a table.
+
+        Args:
+            table_id (int): ID of the table of interest.
+            entries (list[dict]): List of entries to add/change.
+            user_field_names (bool, optional): Whether to use field names or field IDs. Defaults to True.
+            fail_on_error (bool, optional): Whether to fail if error appears. Defaults to False.
+
+        Returns:
+            tuple[list, list]: List of touched IDs and list of errors.
         """
-        Add multiple entries.
-        """
+
         entries_update = []
         entries_new = []
         for entry in entries:
@@ -418,4 +494,7 @@ class BaserowApi:
                     f"Update rows ({len(entries_update)}): " + err.response.text
                 )
 
-        return touched_ids, errors
+        if errors and fail_on_error:
+            raise RuntimeError(errors)
+        else:
+            return touched_ids, errors
