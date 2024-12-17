@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Any, Optional
 
 import requests
 import warnings
@@ -22,7 +23,7 @@ def load_token(token_path: str) -> str:
     return token
 
 
-def format_value(raw_value: dict, field_info: dict) -> any:
+def format_value(raw_value: dict, field_info: dict) -> Any:
     """
     Extract the value/id from a single_select, multiple_select or link_row field.
 
@@ -62,7 +63,7 @@ class BaserowApi:
             self._token = load_token(token_path)
         elif token:
             self._token = token
-        self._fields: dict[int, any] = {}
+        self._fields: dict[int, Any] = {}
 
     def _get_fields(self, table_id: int) -> str:
         """Get fields for a table.
@@ -85,12 +86,12 @@ class BaserowApi:
 
     def _get_rows_data(
         self,
-        url: str = None,
-        table_id: int = None,
-        entry_id: int = None,
+        url: Optional[str] = None,
+        table_id: Optional[int] = None,
+        entry_id: Optional[int] = None,
         user_field_names: bool = False,
         paginated: bool = False,
-    ) -> str:
+    ) -> dict:
         """Get rows data from a table.
 
         Args:
@@ -130,6 +131,7 @@ class BaserowApi:
         resp.raise_for_status()
         data = resp.json()
 
+        # If not specific entry and paginated, get all data
         if not entry_id and paginated:
             if "results" not in data:
                 raise RuntimeError(f"Could not get data from {get_rows_url}")
@@ -138,9 +140,8 @@ class BaserowApi:
                 return data["results"] + self._get_rows_data(
                     url=data["next"], paginated=paginated
                 )
-            return data["results"]
-        else:
-            return data
+
+        return data["results"]
 
     def _create_row(
         self, table_id: int, data: dict, user_field_names: bool = False
@@ -323,7 +324,7 @@ class BaserowApi:
 
     def get_data(
         self, table_id: int, writable_only: bool = True, user_field_names: bool = True
-    ) -> dict[int, dict[str, any]]:
+    ) -> dict[int, dict[str, Any]]:
         """Get all data in a table.
 
         writable_only - Only return fields which can be written to. This
@@ -336,7 +337,7 @@ class BaserowApi:
             user_field_names (bool, optional): _description_. Defaults to True.
 
         Returns:
-            dict[int, dict[str, any]]: dictionary of data in the table.
+            dict[int, dict[str, Any]]: dictionary of data in the table.
         """
         if writable_only:
             fields = self.get_writable_fields(table_id)
@@ -365,7 +366,7 @@ class BaserowApi:
         table_id: int,
         entry_id: int,
         linked: bool = False,
-        seen_tables: list = None,
+        seen_tables: Optional[list] = None,
         user_field_names: bool = True,
     ) -> dict:
         """Get a single entry from a table.
@@ -421,7 +422,7 @@ class BaserowApi:
         self,
         table_id: int,
         data: dict,
-        row_id: int = None,
+        row_id: Optional[int] = None,
         user_field_names: bool = True,
     ) -> int:
         """Add/Change data to a table.
