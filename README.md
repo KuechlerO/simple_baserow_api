@@ -1,10 +1,9 @@
 # simple_baserow_api
 
-[![codecov](https://codecov.io/gh/KuechlerO/simple_baserow_api/branch/main/graph/badge.svg?token=simple_baserow_api_token_here)](https://codecov.io/gh/KuechlerO/simple_baserow_api)
-[![CI](https://github.com/KuechlerO/simple_baserow_api/actions/workflows/main.yml/badge.svg)](https://github.com/KuechlerO/simple_baserow_api/actions/workflows/main.yml)
-
 A [Baserow API](https://baserow.io/docs/apis/rest-api) wrapper for Python:
 *simple_baserow_api* created by KuechlerO
+
+For a detailed documentation, please visit the [simple_baserow_api documentation](https://kuechlero.github.io/simple_baserow_api/).
 
 ## Install it from PyPI
 
