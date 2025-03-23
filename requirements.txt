@@ -5,3 +5,4 @@
 # You can also run `make switch-to-poetry` to use the poetry package manager.
 requests
 types-requests
+pdoc3
