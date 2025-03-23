@@ -1,5 +1,5 @@
 # from simple_baserow_api import BaserowApi, load_token, NAME
-from ..simple_baserow_api import BaserowApi, load_token, NAME
+from simple_baserow_api import BaserowApi, load_token, NAME
 
 import pytest
 from requests.exceptions import HTTPError
