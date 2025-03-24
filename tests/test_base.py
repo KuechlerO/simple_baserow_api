@@ -1,5 +1,4 @@
-# from simple_baserow_api import BaserowApi, load_token, NAME
-from simple_baserow_api import BaserowApi, load_token, NAME
+from simple_baserow_api import BaserowApi, NAME
 
 import pytest
 from requests.exceptions import HTTPError
@@ -15,9 +14,9 @@ def baserow_api():
     database_url = "https://phenotips.charite.de"
 
     # This fixture returns a dictionary with some data
-    bs_api_token = load_token(
-        "/Users/oliverkuchler/Programming/git_projects/baserow_token.txt"
-    )
+    tokenfile = "/Users/oliverkuchler/Programming/git_projects/baserow_token.txt"
+    with open(tokenfile, "r") as tokenfile:
+        bs_api_token = tokenfile.readline().strip()
     return BaserowApi(database_url, token=bs_api_token)
 
 
@@ -52,7 +51,8 @@ def test_convert_option(baserow_api):
 
 
 # --------- public methods ---------
-# ATTENTION: A lot of hard-coded IDs are used in the tests. These IDs need to be adjusted to the actual IDs in the database.
+# ATTENTION: A lot of hard-coded IDs are used in the tests. These IDs need to be
+# adjusted to the actual IDs in the database.
 
 
 def test_get_fields(baserow_api):
@@ -103,9 +103,7 @@ def test_get_writable_fields(baserow_api):
     assert "number" in field_types, f"Fields are {fields}"
 
     # Assert that
-    assert all(
-        [field["read_only"] == False for field in fields]
-    ), f"Fields are {fields}"
+    assert all([not field["read_only"] for field in fields]), f"Fields are {fields}"
 
 
 def test_get_data_writable1(baserow_api):
@@ -181,33 +179,6 @@ def test_get_entry(baserow_api):
     assert (
         "id" not in entry.keys()
     ), f"Entry is {entry}"  # id should not be in the entry
-
-
-def test_add_data_add_simple_row(baserow_api):
-    table_id = 1050
-
-    # Add a simple row
-    my_data = {
-        "Medgen ID": "Test-MedgenID",
-        "Anmerkungen": "TestAnmerkungen",
-        "Aktiv": True,
-        "WebHook-Trigger": True,
-        "Zahl": 12,
-    }
-    row_id = baserow_api.add_data(table_id, my_data, row_id=None, user_field_names=True)
-
-    # Check if the row was added
-    entry = baserow_api.get_entry(table_id, row_id)
-    for key, value in my_data.items():
-        assert str(entry[key]) == str(value), f"Entry is {entry}"
-
-    # Delete the row again
-    baserow_api._delete_row(table_id, row_id)
-    # Check if the row was deleted
-    try:
-        entry = baserow_api.get_entry(table_id, row_id)
-    except HTTPError as e:
-        assert e.response.status_code == 404, f"Entry is {entry}"
 
 
 def test_add_data_add_simple_row(baserow_api):
@@ -446,6 +417,7 @@ def test_add_data_batch_with_fail(baserow_api):
                 table_id, [new_data[1]], user_field_names=True, fail_on_error=True
             )[0][0]
         )
+        print(e_info)
 
     # Delete the rows again
     for row_id in row_ids:

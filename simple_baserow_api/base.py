@@ -14,15 +14,6 @@ This is the principal module of the simple_baserow_api project.
 NAME = "simple_baserow_api"
 
 
-def _load_token(token_path: str) -> str:
-    """
-    Load api token from a file.
-    """
-    with open(token_path) as tokenfile:
-        token = tokenfile.readline().strip()
-    return token
-
-
 def _format_value(raw_value: dict, field_info: dict) -> Any:
     """
     Extract the value/id from a single_select, multiple_select or
@@ -61,7 +52,8 @@ class BaserowApi:
     def __init__(self, database_url: str, token=None, token_path=None):
         self._database_url = database_url
         if token_path:
-            self._token = _load_token(token_path)
+            with open(token_path) as tokenfile:
+                self._token = tokenfile.readline().strip()
         elif token:
             self._token = token
 
