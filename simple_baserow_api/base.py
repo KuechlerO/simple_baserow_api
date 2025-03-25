@@ -478,16 +478,16 @@ class BaserowApi:
             tuple[list, list]: List of touched IDs and list of errors.
         """
 
-        def process_entries(entries, batch_operation, single_operation):
+        def process_entries(input_entries, batch_operation, single_operation):
             """Helper function to process entries for create or update."""
             processed_ids = []
             try:
                 processed_ids += batch_operation(
-                    table_id, entries_new, user_field_names=user_field_names
+                    table_id, input_entries, user_field_names=user_field_names
                 )
             except requests.HTTPError as err:
                 if err.response.status_code == 504:  # Handle Gateway Timeout
-                    for entry in entries:  # Process each entry individually
+                    for entry in input_entries:  # Process each entry individually
                         processed_ids.append(
                             single_operation(
                                 table_id,
