@@ -3,6 +3,7 @@ from typing import Any, Optional
 
 import requests
 import warnings
+import time
 
 """
 simple_baserow_api base module.
@@ -487,6 +488,13 @@ class BaserowApi:
                 )
             except requests.HTTPError as err:
                 if err.response.status_code == 504:  # Handle Gateway Timeout
+                    # Sleep for 60 seconds and retry
+                    warnings.warn(
+                        f"Gateway Timeout: {err.response.text}. Retrying after 60 "
+                        f"seconds with single operations."
+                    )
+                    time.sleep(60)
+                    # Retry the batch operation
                     for entry in input_entries:  # Process each entry individually
                         processed_ids.append(
                             single_operation(
