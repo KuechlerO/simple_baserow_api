@@ -103,7 +103,7 @@ Get a single row from a table.
 This is useful when you want to retrieve a specific row from a table.
 ```py
 # Get a single row from a table
-row = api.get_row(table_id=1, row_id=1)
+row = api.get_entry(table_id=1, row_id=1)
 print(row)
 ```
 
