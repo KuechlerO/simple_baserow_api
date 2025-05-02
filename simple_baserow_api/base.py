@@ -53,8 +53,8 @@ class BaserowApi:
     def __init__(
         self,
         database_url: str,
-        token: str = None,
-        token_path: str = None,
+        token: Optional[str] = None,
+        token_path: Optional[str] = None,
         jwt_token: bool = False,
     ):
         """Initialize the BaserowApi class.
@@ -62,8 +62,9 @@ class BaserowApi:
 
         Args:
             database_url (str): URL of the Baserow database.
-            token (str, optional): Token-String for Baserow access. Defaults to None.
-            token_path (str, optional): Path to file containing the Token-String. Defaults to None.
+            token (Optional[str], optional): Token-String for Baserow access. Defaults to None.
+            token_path (Optional[str], optional): Path to file containing the Token-String.
+                Defaults to None.
             jwt_token (bool, optional): JWT-Token-String. Defaults to False.
         """
         self._database_url = database_url
@@ -73,10 +74,7 @@ class BaserowApi:
         elif token:
             self._token = token
 
-        if jwt_token:
-            self._token_mode = "JWT"
-        else:
-            self._token_mode = "Token"
+        self._token_mode = "JWT" if jwt_token else "Token"
 
     def get_fields(self, table_id: int) -> list[dict]:
         """Get all fields / column specifications for a table.
