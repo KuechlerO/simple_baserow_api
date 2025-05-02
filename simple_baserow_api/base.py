@@ -50,13 +50,18 @@ class BaserowApi:
     table_path = "api/database/rows/table"
     fields_path = "api/database/fields/table"
 
-    def __init__(self, database_url: str, token=None, token_path=None):
+    def __init__(self, database_url: str, token=None, token_path=None, jwt_token=False):
         self._database_url = database_url
         if token_path:
             with open(token_path) as tokenfile:
                 self._token = tokenfile.readline().strip()
         elif token:
             self._token = token
+
+        if jwt_token:
+            self._token_mode = "JWT"
+        else:
+            self._token_mode = "Token"
 
     def get_fields(self, table_id: int) -> list[dict]:
         """Get all fields / column specifications for a table.
@@ -70,7 +75,7 @@ class BaserowApi:
         get_fields_url = f"{self._database_url}/{self.fields_path}/{table_id}/"
         resp = requests.get(
             get_fields_url,
-            headers={"Authorization": f"Token {self._token}"},
+            headers={"Authorization": f"{self._token_mode} {self._token}"},
         )
 
         resp.raise_for_status()
@@ -125,7 +130,7 @@ class BaserowApi:
 
         resp = requests.get(
             get_rows_url,
-            headers={"Authorization": f"Token {self._token}"},
+            headers={"Authorization": f"{self._token_mode} {self._token}"},
         )
 
         resp.raise_for_status()
@@ -171,7 +176,7 @@ class BaserowApi:
         resp = requests.post(
             create_row_url,
             headers={
-                "Authorization": f"Token {self._token}",
+                "Authorization": f"{self._token_mode} {self._token}",
                 "Content-Type": "application/json",
             },
             json=data,
@@ -192,7 +197,7 @@ class BaserowApi:
         resp = requests.post(
             create_rows_url,
             headers={
-                "Authorization": f"Token {self._token}",
+                "Authorization": f"{self._token_mode} {self._token}",
                 "Content-Type": "application/json",
             },
             json={"items": datas},
@@ -223,7 +228,7 @@ class BaserowApi:
         resp = requests.patch(
             update_row_url,
             headers={
-                "Authorization": f"Token {self._token}",
+                "Authorization": f"{self._token_mode} {self._token}",
                 "Content-Type": "application/json",
             },
             json=data,
@@ -244,7 +249,7 @@ class BaserowApi:
         resp = requests.patch(
             update_rows_url,
             headers={
-                "Authorization": f"Token {self._token}",
+                "Authorization": f"{self._token_mode} {self._token}",
                 "Content-Type": "application/json",
             },
             json={"items": datas},
@@ -258,7 +263,7 @@ class BaserowApi:
         delete_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
         resp = requests.delete(
             delete_row_url,
-            headers={"Authorization": f"Token {self._token}"},
+            headers={"Authorization": f"{self._token_mode} {self._token}"},
         )
         resp.raise_for_status()
 
