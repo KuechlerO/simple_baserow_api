@@ -50,7 +50,22 @@ class BaserowApi:
     table_path = "api/database/rows/table"
     fields_path = "api/database/fields/table"
 
-    def __init__(self, database_url: str, token=None, token_path=None, jwt_token=False):
+    def __init__(
+        self,
+        database_url: str,
+        token: str = None,
+        token_path: str = None,
+        jwt_token: bool = False,
+    ):
+        """Initialize the BaserowApi class.
+        This class is a wrapper around the Baserow API.
+
+        Args:
+            database_url (str): URL of the Baserow database.
+            token (str, optional): Token-String for Baserow access. Defaults to None.
+            token_path (str, optional): Path to file containing the Token-String. Defaults to None.
+            jwt_token (bool, optional): JWT-Token-String. Defaults to False.
+        """
         self._database_url = database_url
         if token_path:
             with open(token_path) as tokenfile:
