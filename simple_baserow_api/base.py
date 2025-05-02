@@ -62,10 +62,12 @@ class BaserowApi:
 
         Args:
             database_url (str): URL of the Baserow database.
-            token (Optional[str], optional): Token-String for Baserow access. Defaults to None.
-            token_path (Optional[str], optional): Path to file containing the Token-String.
+            token (Optional[str], optional): Token-String for Baserow access.
                 Defaults to None.
-            jwt_token (bool, optional): JWT-Token-String. Defaults to False.
+            token_path (Optional[str], optional): Path to file containing the
+                Token-String. Defaults to None.
+            jwt_token (bool, optional): Whether JWT-Token is used instead of
+                Token-String. Defaults to False.
         """
         self._database_url = database_url
         if token_path:
