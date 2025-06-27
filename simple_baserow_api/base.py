@@ -104,6 +104,8 @@ class BaserowApi:
         row_id: Optional[int] = None,
         user_field_names: bool = False,
         paginated: bool = False,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
     ) -> dict:
         """Get rows data from a table.
 
@@ -118,10 +120,15 @@ class BaserowApi:
                 field IDs. Defaults to False.
             paginated (bool, optional): Whether to load multiple pages of data.
                 Defaults to False.
-
+            include (list[str], optional): List of fields to include in the
+                response. Defaults to None (all fields).
+            exclude (list[str], optional): List of fields to exclude from the
+                response. Defaults to None (no fields excluded).
         Returns:
             str: JSON encoded data.
         """
+        query_params = []
+
         if (not table_id and not url) or (table_id and url):
             raise RuntimeError(
                 "Either table_id or url must be provided, " "but not both."
@@ -139,10 +146,19 @@ class BaserowApi:
             if row_id:
                 get_rows_url += f"{row_id}/"
             if user_field_names:
-                get_rows_url += "?user_field_names=true"
+                query_params += ["user_field_names=true"]
         else:
             raise RuntimeError("Either table_id or url must be provided.")
 
+        if include:
+            query_params += [f"include={','.join(include)}"]
+        if exclude:
+            query_params += [f"exclude={','.join(exclude)}"]
+
+        get_rows_url = get_rows_url + (
+            "?" + "&".join(query_params) if query_params else ""
+        )
+        print(f"Getting rows from {get_rows_url}")
         resp = requests.get(
             get_rows_url,
             headers={"Authorization": f"{self._token_mode} {self._token}"},
@@ -350,7 +366,13 @@ class BaserowApi:
         return writable_fields
 
     def get_data(
-        self, table_id: int, writable_only: bool = True, user_field_names: bool = True
+        self,
+        table_id: int,
+        writable_only: bool = True,
+        user_field_names: bool = True,
+        paginated: bool = True,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
     ) -> dict[int, dict[str, Any]]:
         """Get all data from a table.
 
@@ -361,6 +383,11 @@ class BaserowApi:
                 writable fields).
             user_field_names (bool, optional): Whether to reference columns by name
                 or ID. Defaults to True (use names).
+            paginated (bool, optional): Whether to load multiple pages of data. Defaults to True.
+            include (list[str], optional): List of fields to include in the
+                response. Defaults to None (all fields).
+            exclude (list[str], optional): List of fields to exclude from the
+                response. Defaults to None (no fields excluded).
 
         Returns:
             dict[int, dict[str, Any]]: dictionary of data in the table.
@@ -376,7 +403,11 @@ class BaserowApi:
             names = {f'field_{f["id"]}': f for f in fields}
 
         data = self._get_rows_data(
-            table_id=table_id, user_field_names=user_field_names, paginated=True
+            table_id=table_id,
+            user_field_names=user_field_names,
+            paginated=paginated,
+            include=include,
+            exclude=exclude,
         )
 
         # Collect rows with their field names and values
@@ -394,6 +425,8 @@ class BaserowApi:
         linked: bool = False,
         seen_tables: Optional[list] = None,
         user_field_names: bool = True,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
     ) -> dict:
         """Get a single entry from a table.
 
@@ -406,6 +439,10 @@ class BaserowApi:
                 These are not loaded again. Defaults to None.
             user_field_names (bool, optional): Whether to reference columns by name
                 or ID. Defaults to True (use names).
+            include (list[str], optional): List of fields to include in the
+                response. Defaults to None (all fields).
+            exclude (list[str], optional): List of fields to exclude from the
+                response. Defaults to None (no fields excluded).
 
         Returns:
             dict: Entry data.
@@ -415,8 +452,16 @@ class BaserowApi:
             row_id=row_id,
             paginated=False,
             user_field_names=user_field_names,
+            include=include,
+            exclude=exclude,
         )
         fields = self.get_fields(table_id)
+        # If include or exclude are provided, filter the fields
+        if include:
+            fields = [f for f in fields if f["name"] in include]
+        if exclude:
+            fields = [f for f in fields if f["name"] not in exclude]
+
         names = {f["name"]: f for f in fields}
         names = names | {f'field_{f["id"]}': f for f in fields}
         formatted_data = {
@@ -441,6 +486,8 @@ class BaserowApi:
                                 linked=False,
                                 seen_tables=seen_tables_next,
                                 user_field_names=user_field_names,
+                                include=include,
+                                exclude=exclude,
                             )
                             for e_id in ids
                         ]

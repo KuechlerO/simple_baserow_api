@@ -427,3 +427,47 @@ def test_add_data_batch_with_fail(baserow_api):
             entry = baserow_api.get_entry(table_id, row_id)
         except HTTPError as e:
             assert e.response.status_code == 404, f"Entry is {entry}"
+
+
+# --------- testing include ----------
+def test_include_when_loading_all_rows(baserow_api):
+    table_id = 1053
+    data = baserow_api.get_data(table_id, user_field_names=True, include=["Sample-ID"])
+
+    assert "Sample-ID" in data[1].keys(), f"Data is {data[1]}"
+    assert "SnakeSplice-Condition-Group" not in data[1].keys(), f"Data is {data[1]}"
+    # Only Sample-ID should be included
+    assert len(data[1].keys()) == 1, f"Data is {data[1]}"
+
+
+def test_include_when_loading_single_row(baserow_api):
+    table_id = 1053
+    entry_id = 1
+    entry = baserow_api.get_entry(
+        table_id, entry_id, user_field_names=True, include=["Sample-ID"]
+    )
+
+    assert "Sample-ID" in entry.keys(), f"Keys are {entry.keys()}"
+    assert "SnakeSplice-Condition-Group" not in entry.keys(), f"Keys are {entry.keys()}"
+    # Only Sample-ID should be included
+    assert len(entry.keys()) == 1, f"Keys are {entry.keys()}"
+
+
+# ----------- testing exclude ----------
+def test_exclude_when_loading_all_rows(baserow_api):
+    table_id = 1053
+    data = baserow_api.get_data(table_id, user_field_names=True, exclude=["Sample-ID"])
+
+    assert "Sample-ID" not in data[1].keys(), f"Keys are {data[1].keys()}"
+    assert "SnakeSplice-Condition-Group" in data[1].keys(), f"Keys are {data[1].keys()}"
+
+
+def test_exclude_when_loading_single_row(baserow_api):
+    table_id = 1053
+    entry_id = 1
+    entry = baserow_api.get_entry(
+        table_id, entry_id, user_field_names=True, exclude=["Sample-ID"]
+    )
+
+    assert "Sample-ID" not in entry.keys(), f"Keys are {entry.keys()}"
+    assert "SnakeSplice-Condition-Group" in entry.keys(), f"Keys are {entry.keys()}"
