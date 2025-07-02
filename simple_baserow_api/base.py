@@ -158,7 +158,6 @@ class BaserowApi:
         get_rows_url = get_rows_url + (
             "?" + "&".join(query_params) if query_params else ""
         )
-        print(f"Getting rows from {get_rows_url}")
         resp = requests.get(
             get_rows_url,
             headers={"Authorization": f"{self._token_mode} {self._token}"},
