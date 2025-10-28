@@ -452,7 +452,6 @@ class BaserowApi:
             row_id (int): Entry ID for the entry of interest.
             linked (bool, optional): Whether to fully hydrate the output with
                 linked tables. Defaults to False (no data of linked tables is loaded).
-            # TODO: Does this make sense?
             use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
                 instead. Ignored if linked is True. Defaults to True (return IDs).
             seen_tables (list, optional): List of already linked tables.
