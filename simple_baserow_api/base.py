@@ -15,18 +15,19 @@ This is the principal module of the simple_baserow_api project.
 NAME = "simple_baserow_api"
 
 
-def _format_value(
-    raw_value: dict, field_info: dict, use_link_ids: bool = True
-) -> Any:
+def _format_value(raw_value: dict, field_info: dict, use_link_ids: bool = True) -> Any:
     """
     Extract the value/id from a single_select, multiple_select or
     link_row field.
+    :param raw_value: The raw value to format.
+    :param field_info: The field information (type, etc.).
+    :param use_link_ids: Whether to use link IDs or not for link_row fields.
 
-    Example:
+    --- Example ---
     raw_value = {"value": "active"}
     field_info = {"type": "single_select"}
     formatted_value = _format_value(raw_value, field_info)
-    # formatted_value would be "active"
+    # -> formatted_value would be "active"
     """
     if field_info["type"] == "single_select":
         if isinstance(raw_value, dict):
@@ -38,21 +39,17 @@ def _format_value(
         if isinstance(raw_value, list):
             return [v["value"] for v in raw_value]
         raise RuntimeError(f"malformed multiple_select {raw_value}")
-    elif use_link_ids and field_info["type"] == "link_row":
-        if isinstance(raw_value, list):
-            return [v["id"] for v in raw_value]
-        raise RuntimeError(f"malformed link_row {raw_value}")
+    # -- link_row handling ---
     elif field_info["type"] == "link_row":
-        if field_info["link_row_multiple_relationships"]:
-            if isinstance(raw_value, list):
-                return [v["value"] for v in raw_value]
-            raise RuntimeError(
-                f"malformed link_row with multiple_relationships {raw_value}"
-            )
-        else:
-            if isinstance(raw_value, list):
-                return [v["value"] for v in raw_value]
+        if not isinstance(raw_value, list):
             raise RuntimeError(f"malformed link_row {raw_value}")
+        else:
+            if use_link_ids:
+                if isinstance(raw_value, list):
+                    return [v["id"] for v in raw_value]
+            else:
+                if isinstance(raw_value, list):
+                    return [v["value"] for v in raw_value]
     else:
         return raw_value
 
@@ -155,9 +152,7 @@ class BaserowApi:
         if url:
             get_rows_url = url
         elif table_id:
-            get_rows_url = (
-                f"{self._database_url}/{self.table_path}/{table_id}/"
-            )
+            get_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/"
             if row_id:
                 get_rows_url += f"{row_id}/"
             if user_field_names:
@@ -236,9 +231,7 @@ class BaserowApi:
     def _create_rows(
         self, table_id: int, datas: list[dict], user_field_names: bool = False
     ):
-        create_rows_url = (
-            f"{self._database_url}/{self.table_path}/{table_id}/batch/"
-        )
+        create_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
         if user_field_names:
             create_rows_url += "?user_field_names=true"
         resp = requests.post(
@@ -269,9 +262,7 @@ class BaserowApi:
             RuntimeError: If the response is malformed.
         """
         row_id = data.pop("id")
-        update_row_url = (
-            f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
-        )
+        update_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
         if user_field_names:
             update_row_url += "?user_field_names=true"
         resp = requests.patch(
@@ -292,9 +283,7 @@ class BaserowApi:
     def _update_rows(
         self, table_id: int, datas: list[dict], user_field_names: bool = False
     ):
-        update_rows_url = (
-            f"{self._database_url}/{self.table_path}/{table_id}/batch/"
-        )
+        update_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
         if user_field_names:
             update_rows_url += "?user_field_names=true"
         resp = requests.patch(
@@ -311,9 +300,7 @@ class BaserowApi:
         return ids
 
     def _delete_row(self, table_id: int, row_id: int):
-        delete_row_url = (
-            f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
-        )
+        delete_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
         resp = requests.delete(
             delete_row_url,
             headers={"Authorization": f"{self._token_mode} {self._token}"},
@@ -465,6 +452,7 @@ class BaserowApi:
             row_id (int): Entry ID for the entry of interest.
             linked (bool, optional): Whether to fully hydrate the output with
                 linked tables. Defaults to False (no data of linked tables is loaded).
+            # TODO: Does this make sense?
             use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
                 instead. Ignored if linked is True. Defaults to True (return IDs).
             seen_tables (list, optional): List of already linked tables.
@@ -502,8 +490,9 @@ class BaserowApi:
 
         names = {f["name"]: f for f in fields}
         names = names | {f'field_{f["id"]}': f for f in fields}
+
         formatted_data = {
-            k: _format_value(v, names[k], linked or use_linked_row_ids)
+            k: _format_value(v, names[k], use_linked_row_ids)
             for k, v in data.items()
             if k in names
         }
@@ -524,6 +513,7 @@ class BaserowApi:
                                 linked_table_id,
                                 e_id["id"],
                                 linked=False,
+                                use_linked_row_ids=use_linked_row_ids,
                                 seen_tables=seen_tables_next,
                                 user_field_names=user_field_names,
                                 include=include,
@@ -557,9 +547,7 @@ class BaserowApi:
         data_conv = self._convert_selects(data, fields)
         if row_id:
             data_conv["id"] = row_id
-            self._update_row(
-                table_id, data_conv, user_field_names=user_field_names
-            )
+            self._update_row(table_id, data_conv, user_field_names=user_field_names)
         else:
             row_id = self._create_row(
                 table_id, data_conv, user_field_names=user_field_names
@@ -604,9 +592,7 @@ class BaserowApi:
                     )
                     time.sleep(60)
                     # Retry the batch operation
-                    for (
-                        entry
-                    ) in input_entries:  # Process each entry individually
+                    for entry in input_entries:  # Process each entry individually
                         processed_ids.append(
                             single_operation(
                                 table_id,
