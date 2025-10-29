@@ -1,9 +1,9 @@
+import time
+import warnings
 from copy import deepcopy
 from typing import Any, Optional
 
 import requests
-import warnings
-import time
 
 """
 simple_baserow_api base module.
@@ -15,16 +15,19 @@ This is the principal module of the simple_baserow_api project.
 NAME = "simple_baserow_api"
 
 
-def _format_value(raw_value: dict, field_info: dict) -> Any:
+def _format_value(raw_value: dict, field_info: dict, use_link_ids: bool = True) -> Any:
     """
     Extract the value/id from a single_select, multiple_select or
     link_row field.
+    :param raw_value: The raw value to format.
+    :param field_info: The field information (type, etc.).
+    :param use_link_ids: Whether to use link IDs or not for link_row fields.
 
-    Example:
+    --- Example ---
     raw_value = {"value": "active"}
     field_info = {"type": "single_select"}
     formatted_value = _format_value(raw_value, field_info)
-    # formatted_value would be "active"
+    # -> formatted_value would be "active"
     """
     if field_info["type"] == "single_select":
         if isinstance(raw_value, dict):
@@ -36,10 +39,17 @@ def _format_value(raw_value: dict, field_info: dict) -> Any:
         if isinstance(raw_value, list):
             return [v["value"] for v in raw_value]
         raise RuntimeError(f"malformed multiple_select {raw_value}")
+    # -- link_row handling ---
     elif field_info["type"] == "link_row":
-        if isinstance(raw_value, list):
-            return [v["id"] for v in raw_value]
-        raise RuntimeError(f"malformed link_row {raw_value}")
+        if not isinstance(raw_value, list):
+            raise RuntimeError(f"malformed link_row {raw_value}")
+        else:
+            if use_link_ids:
+                if isinstance(raw_value, list):
+                    return [v["id"] for v in raw_value]
+            else:
+                if isinstance(raw_value, list):
+                    return [v["value"] for v in raw_value]
     else:
         return raw_value
 
@@ -372,6 +382,7 @@ class BaserowApi:
         paginated: bool = True,
         include: Optional[list[str]] = None,
         exclude: Optional[list[str]] = None,
+        use_linked_row_ids: bool = True,
     ) -> dict[int, dict[str, Any]]:
         """Get all data from a table.
 
@@ -387,6 +398,8 @@ class BaserowApi:
                 response. Defaults to None (all fields).
             exclude (list[str], optional): List of fields to exclude from the
                 response. Defaults to None (no fields excluded).
+            use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
+                instead. Defaults to True (return IDs).
 
         Returns:
             dict[int, dict[str, Any]]: dictionary of data in the table.
@@ -409,9 +422,13 @@ class BaserowApi:
             exclude=exclude,
         )
 
-        # Collect rows with their field names and values
+        # Collect rows with their field names and values,
         writable_data = {
-            d["id"]: {k: _format_value(v, names[k]) for k, v in d.items() if k in names}
+            d["id"]: {
+                k: _format_value(v, names[k], use_linked_row_ids)
+                for k, v in d.items()
+                if k in names
+            }
             for d in data
         }
 
@@ -422,6 +439,7 @@ class BaserowApi:
         table_id: int,
         row_id: int,
         linked: bool = False,
+        use_linked_row_ids: bool = True,
         seen_tables: Optional[list] = None,
         user_field_names: bool = True,
         include: Optional[list[str]] = None,
@@ -434,6 +452,8 @@ class BaserowApi:
             row_id (int): Entry ID for the entry of interest.
             linked (bool, optional): Whether to fully hydrate the output with
                 linked tables. Defaults to False (no data of linked tables is loaded).
+            use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
+                instead. Ignored if linked is True. Defaults to True (return IDs).
             seen_tables (list, optional): List of already linked tables.
                 These are not loaded again. Defaults to None.
             user_field_names (bool, optional): Whether to reference columns by name
@@ -446,6 +466,12 @@ class BaserowApi:
         Returns:
             dict: Entry data.
         """
+        if linked and not use_linked_row_ids:
+            warnings.warn(
+                "Raw value output from 'linked_row_ids=False' is ignored because "
+                "full linked information is used instead (linked=True)"
+            )
+
         data = self._get_rows_data(
             table_id=table_id,
             row_id=row_id,
@@ -463,8 +489,11 @@ class BaserowApi:
 
         names = {f["name"]: f for f in fields}
         names = names | {f'field_{f["id"]}': f for f in fields}
+
         formatted_data = {
-            k: _format_value(v, names[k]) for k, v in data.items() if k in names
+            k: _format_value(v, names[k], use_linked_row_ids)
+            for k, v in data.items()
+            if k in names
         }
 
         seen_tables_next = seen_tables or []
@@ -483,6 +512,7 @@ class BaserowApi:
                                 linked_table_id,
                                 e_id["id"],
                                 linked=False,
+                                use_linked_row_ids=use_linked_row_ids,
                                 seen_tables=seen_tables_next,
                                 user_field_names=user_field_names,
                                 include=include,
