@@ -471,3 +471,117 @@ def test_exclude_when_loading_single_row(baserow_api):
 
     assert "Sample-ID" not in entry.keys(), f"Keys are {entry.keys()}"
     assert "SnakeSplice-Condition-Group" in entry.keys(), f"Keys are {entry.keys()}"
+
+
+# ------------ testing get_entry with linked rows and use_linked_row_ids -----------
+def test_get_entry_linked_rows_with_ids(baserow_api):
+    table_id = 1053
+    entry_id = 1
+    entry = baserow_api.get_entry(
+        table_id,
+        entry_id,
+        user_field_names=True,
+        linked=True,
+        use_linked_row_ids=True,
+    )
+    # use_linked_row_ids is ignored when linked=True
+    assert "Splice Findings" in entry.keys(), f"Keys are {entry.keys()}"
+    linked_samples = entry["Splice Findings"]
+    assert isinstance(linked_samples, list), f"Splice Findings is {linked_samples}"
+    assert len(linked_samples) > 0, f"Splice Findings is {linked_samples}"
+    first_linked_sample = linked_samples[0]
+    assert isinstance(
+        first_linked_sample, dict
+    ), f"First linked sample is {first_linked_sample}"
+    assert (
+        "Genename" in first_linked_sample.keys()
+    ), f"First linked sample is {first_linked_sample}"
+
+
+def test_get_entry_linked_rows_without_ids(baserow_api):
+    # use_linked_row_ids=False
+    table_id = 1053
+    entry_id = 1
+    entry1 = baserow_api.get_entry(
+        table_id,
+        entry_id,
+        user_field_names=True,
+        linked=True,
+        use_linked_row_ids=False,
+    )
+    entry2 = baserow_api.get_entry(
+        table_id,
+        entry_id,
+        user_field_names=True,
+        linked=True,
+        use_linked_row_ids=True,
+    )
+    # use_linked_row_ids is ignored when linked=True
+    assert entry1 == entry2, f"Entries are different: {entry1} vs {entry2}"
+
+
+# Test get_entry with no links
+def test_get_entry_no_linked_rows(baserow_api):
+    table_id = 1053
+    entry_id = 1
+    entry1 = baserow_api.get_entry(
+        table_id,
+        entry_id,
+        user_field_names=True,
+        linked=False,
+        use_linked_row_ids=False,
+    )
+    entry2 = baserow_api.get_entry(
+        table_id,
+        entry_id,
+        user_field_names=True,
+        linked=False,
+        use_linked_row_ids=True,
+    )
+    # use_linked_row_ids should have an effect when linked=False
+    assert entry1 != entry2, f"Entries are the same: {entry1} vs {entry2}"
+    # Check that the linked field is different
+    linked_field1 = entry1["Splice Findings"]
+    linked_field2 = entry2["Splice Findings"]
+    assert isinstance(linked_field1[0], str), f"Linked field1 is {linked_field1}"
+    assert isinstance(linked_field2[0], int), f"Linked field2 is {linked_field2}"
+
+
+# Test get_data with use_linked_row_ids
+def test_get_data_linked_rows_with_ids(baserow_api):
+    table_id = 1053
+    data = baserow_api.get_data(
+        table_id,
+        user_field_names=True,
+        use_linked_row_ids=True,
+    )
+    assert len(data) > 0, f"Data is {data}"
+    first_entry = data[next(iter(data))]
+    assert "Splice Findings" in first_entry.keys(), f"Keys are {first_entry.keys()}"
+    linked_samples = first_entry["Splice Findings"]
+    assert isinstance(linked_samples, list), f"Splice Findings is {linked_samples}"
+    assert len(linked_samples) > 0, f"Splice Findings is {linked_samples}"
+    for entry in linked_samples:
+        assert isinstance(
+            entry, int
+        ), f"Linked sample entry is {entry} in linked samples {linked_samples}"
+
+
+def test_get_data_linked_rows_without_ids(baserow_api):
+    # use_linked_row_ids=False
+    table_id = 1053
+    data = baserow_api.get_data(
+        table_id,
+        user_field_names=True,
+        use_linked_row_ids=False,
+    )
+    assert len(data) > 0, f"Data is {data}"
+    first_entry = data[next(iter(data))]
+    assert "Splice Findings" in first_entry.keys(), f"Keys are {first_entry.keys()}"
+    linked_samples = first_entry["Splice Findings"]
+    assert isinstance(linked_samples, list), f"Splice Findings is {linked_samples}"
+    assert len(linked_samples) > 0, f"Splice Findings is {linked_samples}"
+    for entry in linked_samples:
+        assert isinstance(
+            entry, str
+        ), f"Linked sample entry is {entry} in linked samples {linked_samples}"
