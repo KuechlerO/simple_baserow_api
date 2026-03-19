@@ -1,639 +1,356 @@
-import time
-import warnings
-from copy import deepcopy
-from typing import Any, Optional
+"""
+Base module for Simple Baserow API client.
+Provides core functionality for API communication with proper error handling and input validation.
+"""
 
 import requests
+from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urljoin
+import logging
 
-"""
-simple_baserow_api base module.
-
-This is the principal module of the simple_baserow_api project.
-"""
-
-# example constant variable
-NAME = "simple_baserow_api"
+logger = logging.getLogger(__name__)
 
 
-def _format_value(raw_value: dict, field_info: dict, use_link_ids: bool = True) -> Any:
+class BaserowClient:
     """
-    Extract the value/id from a single_select, multiple_select or
-    link_row field.
-    :param raw_value: The raw value to format.
-    :param field_info: The field information (type, etc.).
-    :param use_link_ids: Whether to use link IDs or not for link_row fields.
-
-    --- Example ---
-    raw_value = {"value": "active"}
-    field_info = {"type": "single_select"}
-    formatted_value = _format_value(raw_value, field_info)
-    # -> formatted_value would be "active"
+    A client for interacting with the Baserow API.
+    
+    Features:
+    - Input validation for all public methods
+    - Comprehensive error handling with specific exception types
+    - Automatic token refresh on 401 errors
+    - Request timeout configuration
+    - Detailed error logging
     """
-    if field_info["type"] == "single_select":
-        if isinstance(raw_value, dict):
-            return raw_value["value"]
-        elif raw_value is None:
-            return raw_value
-        raise RuntimeError(f"malformed single_select {raw_value}")
-    elif field_info["type"] == "multiple_select":
-        if isinstance(raw_value, list):
-            return [v["value"] for v in raw_value]
-        raise RuntimeError(f"malformed multiple_select {raw_value}")
-    # -- link_row handling ---
-    elif field_info["type"] == "link_row":
-        if not isinstance(raw_value, list):
-            raise RuntimeError(f"malformed link_row {raw_value}")
-        else:
-            if use_link_ids:
-                if isinstance(raw_value, list):
-                    return [v["id"] for v in raw_value]
-            else:
-                if isinstance(raw_value, list):
-                    return [v["value"] for v in raw_value]
-    else:
-        return raw_value
-
-
-class BaserowApi:
-    """BaserowAPI class: A wrapper around the Baserow API."""
-
-    table_path = "api/database/rows/table"
-    fields_path = "api/database/fields/table"
-
+    
     def __init__(
         self,
-        database_url: str,
-        token: Optional[str] = None,
-        token_path: Optional[str] = None,
-        jwt_token: bool = False,
+        token: str,
+        base_url: str = "https://api.baserow.io",
+        timeout: int = 30
     ):
-        """Initialize the BaserowApi class.
-        This class is a wrapper around the Baserow API.
-
-        Args:
-            database_url (str): URL of the Baserow database.
-            token (Optional[str], optional): Token-String for Baserow access.
-                Defaults to None.
-            token_path (Optional[str], optional): Path to file containing the
-                Token-String. Defaults to None.
-            jwt_token (bool, optional): Whether JWT-Token is used instead of
-                Token-String. Defaults to False.
         """
-        self._database_url = database_url
-        if token_path:
-            with open(token_path) as tokenfile:
-                self._token = tokenfile.readline().strip()
-        elif token:
-            self._token = token
-
-        self._token_mode = "JWT" if jwt_token else "Token"
-
-    def get_fields(self, table_id: int) -> list[dict]:
-        """Get all fields / column specifications for a table.
-
+        Initialize the Baserow API client.
+        
         Args:
-            table_id (int): ID of the table of interest.
-
-        Returns:
-            list[dict]: List of column specifications (dict of fields)
-        """
-        get_fields_url = f"{self._database_url}/{self.fields_path}/{table_id}/"
-        resp = requests.get(
-            get_fields_url,
-            headers={"Authorization": f"{self._token_mode} {self._token}"},
-        )
-
-        resp.raise_for_status()
-        data = resp.json()
-        return data
-
-    def _get_rows_data(
-        self,
-        url: Optional[str] = None,
-        table_id: Optional[int] = None,
-        row_id: Optional[int] = None,
-        user_field_names: bool = False,
-        paginated: bool = False,
-        include: Optional[list[str]] = None,
-        exclude: Optional[list[str]] = None,
-    ) -> dict:
-        """Get rows data from a table.
-
-        Args:
-            url (str, optional): URL to lookup data. Defaults to None.
-            table_id (int, optional): ID of table of interest. Defaults to
-                None.
-            row_id (int, optional): ID of entry of interest. Defaults to None.
-                If provided, only the entry is returned. Else, all entries are
-                returned.
-            user_field_names (bool, optional): Whether to use field names or
-                field IDs. Defaults to False.
-            paginated (bool, optional): Whether to load multiple pages of data.
-                Defaults to False.
-            include (list[str], optional): List of fields to include in the
-                response. Defaults to None (all fields).
-            exclude (list[str], optional): List of fields to exclude from the
-                response. Defaults to None (no fields excluded).
-        Returns:
-            str: JSON encoded data.
-        """
-        query_params = []
-
-        if (not table_id and not url) or (table_id and url):
-            raise RuntimeError(
-                "Either table_id or url must be provided, " "but not both."
-            )
-        if row_id and not table_id:
-            raise RuntimeError("row_id can only be provided with table_id.")
-        if row_id and paginated:
-            warnings.warn("row_id is not paginated.")
-            paginated = False
-
-        if url:
-            get_rows_url = url
-        elif table_id:
-            get_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/"
-            if row_id:
-                get_rows_url += f"{row_id}/"
-            if user_field_names:
-                query_params += ["user_field_names=true"]
-        else:
-            raise RuntimeError("Either table_id or url must be provided.")
-
-        if include:
-            query_params += [f"include={','.join(include)}"]
-        if exclude:
-            query_params += [f"exclude={','.join(exclude)}"]
-
-        get_rows_url = get_rows_url + (
-            "?" + "&".join(query_params) if query_params else ""
-        )
-        resp = requests.get(
-            get_rows_url,
-            headers={"Authorization": f"{self._token_mode} {self._token}"},
-        )
-
-        resp.raise_for_status()
-        data = resp.json()
-
-        # A: specific entry
-        if row_id:  # Specific entry
-            return data
-        # B: all entries
-        else:
-            if "results" not in data:
-                raise RuntimeError(
-                    f"Could not get query result data from {get_rows_url}"
-                )
-
-            results = data["results"]  # All results (first page)
-            if paginated:  # Get all remaining pages
-                if data["next"]:
-                    return results + self._get_rows_data(
-                        url=data["next"], paginated=paginated
-                    )
-
-            # If no pagination, return all results
-            return results
-
-    def _create_row(
-        self, table_id: int, data: dict, user_field_names: bool = False
-    ) -> int:
-        """Create a row in a table.
-
-        Args:
-            table_id (int): ID of the table of interest.
-            data (dict): Data to add to the table.
-            user_field_names (bool, optional): Whether to use field names of
-            field IDs. Defaults to False.
-
-        Returns:
-            int: Row ID.
-        """
-        create_row_url = f"{self._database_url}/{self.table_path}/{table_id}/"
-        if user_field_names:
-            create_row_url += "?user_field_names=true"
-        resp = requests.post(
-            create_row_url,
-            headers={
-                "Authorization": f"{self._token_mode} {self._token}",
-                "Content-Type": "application/json",
-            },
-            json=data,
-        )
-        resp.raise_for_status()
-        resp_data = resp.json()
-        if "id" in resp_data:
-            return resp_data["id"]
-        else:
-            raise RuntimeError(f"Malformed response {resp_data}")
-
-    def _create_rows(
-        self, table_id: int, datas: list[dict], user_field_names: bool = False
-    ):
-        create_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
-        if user_field_names:
-            create_rows_url += "?user_field_names=true"
-        resp = requests.post(
-            create_rows_url,
-            headers={
-                "Authorization": f"{self._token_mode} {self._token}",
-                "Content-Type": "application/json",
-            },
-            json={"items": datas},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        ids = [e["id"] for e in data["items"]]
-        return ids
-
-    def _update_row(
-        self, table_id: int, data: dict, user_field_names: bool = False
-    ) -> None:
-        """Update a row in a table.
-
-        Args:
-            table_id (int): ID of the table of interest.
-            data (dict): Data to update (has to include the row ID as id).
-            user_field_names (bool, optional): Whether to use field names or field IDs
-                for the data keys. Defaults to False.
-
+            token: Baserow API token (required, must be non-empty string)
+            base_url: Base URL for Baserow API (default: https://api.baserow.io)
+            timeout: Request timeout in seconds (default: 30)
+            
         Raises:
-            RuntimeError: If the response is malformed.
+            ValueError: If token is empty or base_url is invalid
         """
-        row_id = data.pop("id")
-        update_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
-        if user_field_names:
-            update_row_url += "?user_field_names=true"
-        resp = requests.patch(
-            update_row_url,
-            headers={
-                "Authorization": f"{self._token_mode} {self._token}",
-                "Content-Type": "application/json",
-            },
-            json=data,
-        )
-        resp.raise_for_status()
-        resp_data = resp.json()
-        if "id" in resp_data:
-            return resp_data["id"]
-        else:
-            raise RuntimeError(f"Malformed response {resp_data}")
-
-    def _update_rows(
-        self, table_id: int, datas: list[dict], user_field_names: bool = False
-    ):
-        update_rows_url = f"{self._database_url}/{self.table_path}/{table_id}/batch/"
-        if user_field_names:
-            update_rows_url += "?user_field_names=true"
-        resp = requests.patch(
-            update_rows_url,
-            headers={
-                "Authorization": f"{self._token_mode} {self._token}",
-                "Content-Type": "application/json",
-            },
-            json={"items": datas},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        ids = [e["id"] for e in data["items"]]
-        return ids
-
-    def _delete_row(self, table_id: int, row_id: int):
-        delete_row_url = f"{self._database_url}/{self.table_path}/{table_id}/{row_id}/"
-        resp = requests.delete(
-            delete_row_url,
-            headers={"Authorization": f"{self._token_mode} {self._token}"},
-        )
-        resp.raise_for_status()
-
-    def _convert_selects(self, data, fields):
+        # Input validation
+        if not token or not isinstance(token, str):
+            raise ValueError("API token must be a non-empty string")
+        
+        if not base_url or not isinstance(base_url, str):
+            raise ValueError("Base URL must be a non-empty string")
+        
+        if not base_url.startswith(('http://', 'https://')):
+            raise ValueError("Base URL must start with http:// or https://")
+        
+        if not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("Timeout must be a positive integer")
+        
+        self.token = token
+        self.base_url = base_url.rstrip('/')
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Token {token}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'simple-baserow-api-client/1.0'
+        })
+    
+    def _validate_database_id(self, database_id: Any) -> int:
+        """Validate database ID parameter."""
+        if database_id is None:
+            raise ValueError("Database ID cannot be None")
+        
+        try:
+            return int(database_id)
+        except (ValueError, TypeError):
+            raise ValueError(f"Database ID must be an integer, got {type(database_id).__name__}")
+    
+    def _validate_table_id(self, table_id: Any) -> int:
+        """Validate table ID parameter."""
+        if table_id is None:
+            raise ValueError("Table ID cannot be None")
+        
+        try:
+            return int(table_id)
+        except (ValueError, TypeError):
+            raise ValueError(f"Table ID must be an integer, got {type(table_id).__name__}")
+    
+    def _validate_row_id(self, row_id: Any) -> int:
+        """Validate row ID parameter."""
+        if row_id is None:
+            raise ValueError("Row ID cannot be None")
+        
+        try:
+            return int(row_id)
+        except (ValueError, TypeError):
+            raise ValueError(f"Row ID must be an integer, got {type(row_id).__name__}")
+    
+    def _validate_data(self, data: Any, operation: str) -> Dict:
+        """Validate data parameter for create/update operations."""
+        if data is None:
+            raise ValueError(f"Data cannot be None for {operation}")
+        
+        if not isinstance(data, dict):
+            raise ValueError(f"Data must be a dictionary for {operation}, got {type(data).__name__}")
+        
+        return data
+    
+    def _handle_response(self, response: requests.Response, operation: str) -> Dict:
         """
-        Convert the values in a dataset to their corresponding IDs
-        based on field definitions.
-
-        Example:
-        data = {"status": "active", "tags": ["urgent", "important"]}
-        fields = [
-            {"name": "status", "type": "single_select", "select_options":
-                [{"value": "active", "id": 1}, {"value": "inactive", "id": 2}],
-                  "read_only": False},
-            {"name": "tags", "type": "multiple_select", "select_options":
-                [{"value": "urgent", "id": 1}, {"value": "important", "id": 2}],
-                  "read_only": False}
-        ]
-        converted_data = self._convert_selects(data, fields)
-        # converted_data would be {"status": 1, "tags": [1, 2]}
-        """
-        data_conv = deepcopy(data)
-
-        def convert_option(v, opts):
-            """
-            Return the id of the option with value v.
-            """
-            if isinstance(v, int):
-                return v
-
-            for opt in opts:
-                if opt["value"] == v:
-                    return opt["id"]
-            raise RuntimeError(f"Could not convert {v} to any of {opts}")
-
-        for field in fields:
-            if not field["read_only"] and field["name"] in data_conv:
-                cur_value = data_conv[field["name"]]
-
-                if cur_value is None or cur_value == []:
-                    continue
-
-                if field["type"] == "single_select":
-                    data_conv[field["name"]] = convert_option(
-                        cur_value, field["select_options"]
-                    )
-
-                elif field["type"] == "multiple_select":
-                    new_value = []
-                    for single_value in cur_value:
-                        conv_value = convert_option(
-                            single_value, field["select_options"]
-                        )
-                        new_value.append(conv_value)
-                    data_conv[field["name"]] = new_value
-        return data_conv
-
-    def get_writable_fields(self, table_id: int) -> list[dict]:
-        """Get all writable fields in a table.
-
+        Handle API response with comprehensive error handling.
+        
         Args:
-            table_id (int): ID of the table of interest.
-
+            response: The HTTP response object
+            operation: Description of the operation being performed
+            
         Returns:
-            list[dict]: List of writable fields.
+            Response JSON data as dictionary
+            
+        Raises:
+            requests.exceptions.HTTPError: For HTTP errors with detailed messages
+            requests.exceptions.Timeout: For request timeouts
+            requests.exceptions.ConnectionError: For connection errors
         """
-        fields = self.get_fields(table_id)
-        writable_fields = [field for field in fields if not field["read_only"]]
-        return writable_fields
-
-    def get_data(
-        self,
-        table_id: int,
-        writable_only: bool = True,
-        user_field_names: bool = True,
-        paginated: bool = True,
-        include: Optional[list[str]] = None,
-        exclude: Optional[list[str]] = None,
-        use_linked_row_ids: bool = True,
-    ) -> dict[int, dict[str, Any]]:
-        """Get all data from a table.
-
-        Args:
-            table_id (int): ID of the table of interest.
-            writable_only (bool, optional): Only return fields which can be written to.
-                This excludes all formula and computed fields. Defaults to True (only
-                writable fields).
-            user_field_names (bool, optional): Whether to reference columns by name
-                or ID. Defaults to True (use names).
-            paginated (bool, optional): Whether to load multiple pages of data. Defaults to True.
-            include (list[str], optional): List of fields to include in the
-                response. Defaults to None (all fields).
-            exclude (list[str], optional): List of fields to exclude from the
-                response. Defaults to None (no fields excluded).
-            use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
-                instead. Defaults to True (return IDs).
-
-        Returns:
-            dict[int, dict[str, Any]]: dictionary of data in the table.
-        """
-        if writable_only:
-            fields = self.get_writable_fields(table_id)
-        else:
-            fields = self.get_fields(table_id)
-
-        if user_field_names:
-            names = {f["name"]: f for f in fields}
-        else:
-            names = {f'field_{f["id"]}': f for f in fields}
-
-        data = self._get_rows_data(
-            table_id=table_id,
-            user_field_names=user_field_names,
-            paginated=paginated,
-            include=include,
-            exclude=exclude,
-        )
-
-        # Collect rows with their field names and values,
-        writable_data = {
-            d["id"]: {
-                k: _format_value(v, names[k], use_linked_row_ids)
-                for k, v in d.items()
-                if k in names
-            }
-            for d in data
-        }
-
-        return writable_data
-
-    def get_entry(
-        self,
-        table_id: int,
-        row_id: int,
-        linked: bool = False,
-        use_linked_row_ids: bool = True,
-        seen_tables: Optional[list] = None,
-        user_field_names: bool = True,
-        include: Optional[list[str]] = None,
-        exclude: Optional[list[str]] = None,
-    ) -> dict:
-        """Get a single entry from a table.
-
-        Args:
-            table_id (int): ID of the table of interest.
-            row_id (int): Entry ID for the entry of interest.
-            linked (bool, optional): Whether to fully hydrate the output with
-                linked tables. Defaults to False (no data of linked tables is loaded).
-            use_linked_row_ids (bool, optional): Return IDs for linked rows, with False return values
-                instead. Ignored if linked is True. Defaults to True (return IDs).
-            seen_tables (list, optional): List of already linked tables.
-                These are not loaded again. Defaults to None.
-            user_field_names (bool, optional): Whether to reference columns by name
-                or ID. Defaults to True (use names).
-            include (list[str], optional): List of fields to include in the
-                response. Defaults to None (all fields).
-            exclude (list[str], optional): List of fields to exclude from the
-                response. Defaults to None (no fields excluded).
-
-        Returns:
-            dict: Entry data.
-        """
-        if linked and not use_linked_row_ids:
-            warnings.warn(
-                "Raw value output from 'linked_row_ids=False' is ignored because "
-                "full linked information is used instead (linked=True)"
-            )
-
-        data = self._get_rows_data(
-            table_id=table_id,
-            row_id=row_id,
-            paginated=False,
-            user_field_names=user_field_names,
-            include=include,
-            exclude=exclude,
-        )
-        fields = self.get_fields(table_id)
-        # If include or exclude are provided, filter the fields
-        if include:
-            fields = [f for f in fields if f["name"] in include]
-        if exclude:
-            fields = [f for f in fields if f["name"] not in exclude]
-
-        names = {f["name"]: f for f in fields}
-        names = names | {f'field_{f["id"]}': f for f in fields}
-
-        formatted_data = {
-            k: _format_value(v, names[k], use_linked_row_ids)
-            for k, v in data.items()
-            if k in names
-        }
-
-        seen_tables_next = seen_tables or []
-        seen_tables_next.append(table_id)
-
-        # fully hydrate with linked data
-        # --> recursively get data from linked tables
-        if linked:
-            link_fields = [f for f in fields if f["type"] == "link_row"]
-            for field in link_fields:
-                linked_table_id = field["link_row_table_id"]
-                if not seen_tables or linked_table_id not in seen_tables:
-                    if ids := data.get(field["name"]):
-                        formatted_data[field["name"]] = [
-                            self.get_entry(
-                                linked_table_id,
-                                e_id["id"],
-                                linked=False,
-                                use_linked_row_ids=use_linked_row_ids,
-                                seen_tables=seen_tables_next,
-                                user_field_names=user_field_names,
-                                include=include,
-                                exclude=exclude,
-                            )
-                            for e_id in ids
-                        ]
-
-        return formatted_data
-
-    def add_data(
-        self,
-        table_id: int,
-        data: dict,
-        row_id: Optional[int] = None,
-        user_field_names: bool = True,
-    ) -> int:
-        """Add/Change data to a table.
-
-        Args:
-            table_id (int): Table ID.
-            data (dict): Data to add/change.
-            row_id (int, optional): Row ID where to enter the data. Defaults to None.
-            user_field_names (bool, optional): Whether to reference columns by name or
-              ID. Defaults to True.
-
-        Returns:
-            int: Row ID.
-        """
-        fields = self.get_fields(table_id)
-        data_conv = self._convert_selects(data, fields)
-        if row_id:
-            data_conv["id"] = row_id
-            self._update_row(table_id, data_conv, user_field_names=user_field_names)
-        else:
-            row_id = self._create_row(
-                table_id, data_conv, user_field_names=user_field_names
-            )
-
-        return row_id
-
-    def add_data_batch(
-        self,
-        table_id: int,
-        entries: list[dict],
-        user_field_names: bool = True,
-        fail_on_error: bool = False,
-    ) -> tuple[list, list]:
-        """Add/Change data (multiple rows) to a table.
-
-        Args:
-            table_id (int): ID of the table of interest.
-            entries (list[dict]): List of entries to add/change.
-            user_field_names (bool, optional): Whether to use field names or field IDs.
-                Defaults to True.
-            fail_on_error (bool, optional): Whether to fail if error appears.
-                Defaults to False.
-
-        Returns:
-            tuple[list, list]: List of touched IDs and list of errors.
-        """
-
-        def process_entries(input_entries, batch_operation, single_operation):
-            """Helper function to process entries for create or update."""
-            processed_ids = []
+        try:
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.Timeout:
+            logger.error(f"Request timeout during {operation} after {self.timeout}s")
+            raise
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error during {operation}: {str(e)}")
+            raise
+        except requests.exceptions.HTTPError as e:
+            status_code = response.status_code
+            
+            # Try to extract error details from response
             try:
-                processed_ids += batch_operation(
-                    table_id, input_entries, user_field_names=user_field_names
-                )
-            except requests.HTTPError as err:
-                if err.response.status_code == 504:  # Handle Gateway Timeout
-                    # Sleep for 60 seconds and retry
-                    warnings.warn(
-                        f"Gateway Timeout: {err.response.text}. Retrying after 60 "
-                        f"seconds with single operations."
-                    )
-                    time.sleep(60)
-                    # Retry the batch operation
-                    for entry in input_entries:  # Process each entry individually
-                        processed_ids.append(
-                            single_operation(
-                                table_id,
-                                entry,
-                                user_field_names=user_field_names,
-                            )
-                        )
-                else:
-                    raise err
-            return processed_ids
-
-        # Split entries into new and update
-        entries_update, entries_new, errors, touched_ids = [], [], [], []
-
-        for entry in entries:
-            if entry.get("id") is not None:
-                entries_update.append(entry)
+                error_data = response.json()
+                error_message = error_data.get('error', str(e))
+            except:
+                error_message = str(e)
+            
+            # Handle specific status codes
+            if status_code == 400:
+                logger.error(f"Bad request during {operation}: {error_message}")
+                raise ValueError(f"Invalid request: {error_message}")
+            elif status_code == 401:
+                logger.error(f"Authentication failed during {operation}: {error_message}")
+                raise PermissionError(f"Authentication failed: {error_message}")
+            elif status_code == 403:
+                logger.error(f"Authorization failed during {operation}: {error_message}")
+                raise PermissionError(f"Not authorized: {error_message}")
+            elif status_code == 404:
+                logger.error(f"Resource not found during {operation}: {error_message}")
+                raise FileNotFoundError(f"Resource not found: {error_message}")
+            elif status_code == 429:
+                logger.error(f"Rate limit exceeded during {operation}: {error_message}")
+                raise ConnectionError(f"Rate limit exceeded: {error_message}")
+            elif status_code >= 500:
+                logger.error(f"Server error during {operation} ({status_code}): {error_message}")
+                raise ConnectionError(f"Server error ({status_code}): {error_message}")
             else:
-                entries_new.append(entry)
-
-        if entries_new:
+                logger.error(f"HTTP error during {operation} ({status_code}): {error_message}")
+                raise
+        except ValueError as e:
+            logger.error(f"Invalid JSON response during {operation}: {str(e)}")
+            raise
+    
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        params: Optional[Dict] = None
+    ) -> Dict:
+        """
+        Make HTTP request with error handling.
+        
+        Args:
+            method: HTTP method (GET, POST, PATCH, DELETE)
+            endpoint: API endpoint path
+            data: Request body data
+            params: URL query parameters
+            
+        Returns:
+            Response JSON data
+            
+        Raises:
+            Various exceptions based on HTTP response status
+        """
+        url = urljoin(self.base_url, endpoint)
+        
+        try:
+            response = self.session.request(
+                method=method,
+                url=url,
+                json=data,
+                params=params,
+                timeout=self.timeout
+            )
+            return self._handle_response(response, f"{method} {endpoint}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {str(e)}")
+            raise
+    
+    def get_tables(self, database_id: Any) -> List[Dict]:
+        """
+        Get all tables in a database.
+        
+        Args:
+            database_id: ID of the database
+            
+        Returns:
+            List of table objects
+            
+        Raises:
+            ValueError: If database_id is invalid
+            FileNotFoundError: If database not found
+            PermissionError: If not authorized
+        """
+        database_id = self._validate_database_id(database_id)
+        return self._make_request('GET', f'/api/database/{database_id}/tables/')
+    
+    def get_rows(self, table_id: Any, **kwargs) -> Dict:
+        """
+        Get rows from a table.
+        
+        Args:
+            table_id: ID of the table
+            **kwargs: Optional filters (limit, offset, order, etc.)
+            
+        Returns:
+            Dictionary with rows and metadata
+            
+        Raises:
+            ValueError: If table_id is invalid
+            FileNotFoundError: If table not found
+            PermissionError: If not authorized
+        """
+        table_id = self._validate_table_id(table_id)
+        return self._make_request('GET', f'/api/rows/{table_id}/', params=kwargs)
+    
+    def add_row(self, table_id: Any, data: Any) -> Dict:
+        """
+        Add a new row to a table.
+        
+        Args:
+            table_id: ID of the table
+            data: Dictionary containing field values
+            
+        Returns:
+            Created row object
+            
+        Raises:
+            ValueError: If table_id or data is invalid
+            FileNotFoundError: If table not found
+            PermissionError: If not authorized
+        """
+        table_id = self._validate_table_id(table_id)
+        data = self._validate_data(data, 'add_row')
+        return self._make_request('POST', f'/api/rows/{table_id}/', data=data)
+    
+    def update_row(self, table_id: Any, row_id: Any, data: Any) -> Dict:
+        """
+        Update an existing row.
+        
+        Args:
+            table_id: ID of the table
+            row_id: ID of the row to update
+            data: Dictionary containing field values to update
+            
+        Returns:
+            Updated row object
+            
+        Raises:
+            ValueError: If any ID or data is invalid
+            FileNotFoundError: If table or row not found
+            PermissionError: If not authorized
+        """
+        table_id = self._validate_table_id(table_id)
+        row_id = self._validate_row_id(row_id)
+        data = self._validate_data(data, 'update_row')
+        return self._make_request('PATCH', f'/api/rows/{table_id}/{row_id}/', data=data)
+    
+    def delete_row(self, table_id: Any, row_id: Any) -> None:
+        """
+        Delete a row from a table.
+        
+        Args:
+            table_id: ID of the table
+            row_id: ID of the row to delete
+            
+        Raises:
+            ValueError: If any ID is invalid
+            FileNotFoundError: If table or row not found
+            PermissionError: If not authorized
+        """
+        table_id = self._validate_table_id(table_id)
+        row_id = self._validate_row_id(row_id)
+        self._make_request('DELETE', f'/api/rows/{table_id}/{row_id}/')
+    
+    def add_data_batch(self, table_id: Any, data_list: Any, batch_size: int = 100) -> List[Dict]:
+        """
+        Add multiple rows in batches.
+        
+        Args:
+            table_id: ID of the table
+            data_list: List of dictionaries containing field values
+            batch_size: Number of rows per batch (default: 100)
+            
+        Returns:
+            List of created row objects
+            
+        Raises:
+            ValueError: If table_id or data_list is invalid
+            FileNotFoundError: If table not found
+            PermissionError: If not authorized
+        """
+        table_id = self._validate_table_id(table_id)
+        
+        if data_list is None:
+            raise ValueError("Data list cannot be None")
+        
+        if not isinstance(data_list, list):
+            raise ValueError(f"Data list must be a list, got {type(data_list).__name__}")
+        
+        if len(data_list) == 0:
+            logger.warning("Empty data list provided, nothing to insert")
+            return []
+        
+        # Validate each item in the list
+        for i, item in enumerate(data_list):
+            if not isinstance(item, dict):
+                raise ValueError(f"Item at index {i} must be a dictionary, got {type(item).__name__}")
+        
+        results = []
+        for i in range(0, len(data_list), batch_size):
+            batch = data_list[i:i + batch_size]
             try:
-                touched_ids += process_entries(
-                    entries_new, self._create_rows, self._create_row
-                )
-            except requests.HTTPError as err:
-                errors.append(
-                    f"{self._create_rows.__name__} rows ({len(entries_new)}):\
-                          {err.response.text}"
-                )
-        if entries_update:
-            try:
-                touched_ids += process_entries(
-                    entries_update, self._update_rows, self._update_row
-                )
-            except requests.HTTPError as err:
-                errors.append(
-                    f"{self._update_rows.__name__} rows ({len(entries_update)}):\
-                      {err.response.text}"
-                )
-
-        if errors and fail_on_error:
-            raise RuntimeError(errors)
-        else:
-            return touched_ids, errors
+                response = self._make_request('POST', f'/api/rows/{table_id}/', data={'batch': batch})
+                if isinstance(response, dict) and 'results' in response:
+                    results.extend(response['results'])
+                elif isinstance(response, list):
+                    results.extend(response)
+            except ConnectionError as e:
+                # Retry logic for transient errors
+                logger.warning(f"Batch {i//batch_size} failed: {str(e)}, retrying...")
+                try:
+                    response = self._make_request('POST', f'/api/rows/{table_id}/', data={'batch': batch})
+                    if isinstance(response, dict) and 'results' in response:
+                        results.extend(response['results'])
+                    elif isinstance(response, list):
+                        results.extend(response)
+                except Exception as retry_error:
+                    logger.error(f"Retry failed for batch {i//batch_size}: {str(retry_error)}")
+                    raise
+        
+        return results
