@@ -1033,6 +1033,7 @@ class BaserowApi:
         field_mapping: Optional[dict[str, str]] = None,
         link_match_column: Optional[Union[str, dict[str, str]]] = None,
         exclude_fields: Optional[list[str]] = None,
+        include_fields: Optional[list[str]] = None,
         fail_on_error: bool = False,
         dry_run: bool = False,
     ) -> tuple[Optional[int], list[str]]:
@@ -1062,6 +1063,10 @@ class BaserowApi:
                 match column. Defaults to each linked table's primary field.
             exclude_fields: Optional source field names to skip entirely
                 (e.g. links handled separately by the caller).
+            include_fields: If set, only these source field names are
+                considered for transfer (in addition to the identifier
+                column, which is always written). ``exclude_fields`` is
+                applied after this filter.
             fail_on_error: If True, raise ``RuntimeError`` when any value
                 cannot be transferred (hard failures such as missing fields,
                 type mismatches, or unmatched links). Informational notices
@@ -1084,6 +1089,10 @@ class BaserowApi:
         """
         field_mapping = field_mapping or {}
         exclude_set = set(exclude_fields or [])
+        include_set = set(include_fields) if include_fields is not None else None
+        # Identifier must always be eligible for transfer.
+        if include_set is not None:
+            include_set.add(identifier_column)
         source_fields = {f["name"]: f for f in self.get_fields(source_table_id)}
         target_fields = {f["name"]: f for f in self.get_fields(target_table_id)}
 
@@ -1113,15 +1122,22 @@ class BaserowApi:
         hard_skips: list[str] = []
         notices: list[str] = []
 
+        def _allowed(source_name: str) -> bool:
+            if source_name in exclude_set:
+                return False
+            if include_set is not None and source_name not in include_set:
+                return False
+            return True
+
         # Build the set of source→target field pairs to consider.
         pairs: list[tuple[str, str]] = []
         mapped_sources = set(field_mapping.keys())
         for source_name, target_name in field_mapping.items():
-            if source_name in exclude_set:
+            if not _allowed(source_name):
                 continue
             pairs.append((source_name, target_name))
         for source_name in source_entry:
-            if source_name in exclude_set or source_name in mapped_sources:
+            if source_name in mapped_sources or not _allowed(source_name):
                 continue
             if source_name in target_fields:
                 pairs.append((source_name, source_name))
@@ -1198,6 +1214,9 @@ class BaserowApi:
                     f"Identifier column '{id_target_name}' is not writable on target"
                 )
 
+        # Always report which target fields are in the write payload.
+        notices.append(f"transferred fields: {sorted(payload.keys())}")
+
         existing = self.find_entries(
             target_table_id, id_target_name, identifier_value
         )
@@ -1208,7 +1227,8 @@ class BaserowApi:
             )
             notices.append(notice)
             warnings.warn(notice, stacklevel=2)
-            skipped = hard_skips + notices
+
+        skipped = hard_skips + notices
 
         if dry_run:
             if existing:
@@ -1223,12 +1243,10 @@ class BaserowApi:
                     f"dry_run: would create new row "
                     f"(identifier '{identifier_value}')"
                 )
-            notices.append(
-                f"dry_run payload fields: {sorted(payload.keys())}"
-            )
             skipped = hard_skips + notices
-            for msg in notices[-2:]:
-                warnings.warn(msg, stacklevel=2)
+            for msg in notices:
+                if msg.startswith("dry_run:") or msg.startswith("transferred fields:"):
+                    warnings.warn(msg, stacklevel=2)
             return target_row_id, skipped
 
         if existing:

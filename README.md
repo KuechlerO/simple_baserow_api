@@ -151,6 +151,7 @@ target_row_id, messages = api.synchronize_data(
     target_table_id=20,
     identifier_column="Individuum ID",
     field_mapping={"Kommentar": "Kommentar Einschluss"},  # optional renames
+    include_fields=["Individuum ID", "Vorname", "Nachname"],  # optional allowlist
     exclude_fields=["existierender Index"],  # optional skips
     fail_on_error=False,
 )

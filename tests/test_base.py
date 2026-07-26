@@ -944,7 +944,7 @@ def test_synchronize_data_dry_run_does_not_write(baserow_api, test_tables):
     )
     assert target_row_id is None
     assert any("would create" in m for m in messages)
-    assert any("dry_run payload fields" in m for m in messages)
+    assert any("transferred fields" in m for m in messages)
     assert baserow_api.find_entries(target["id"], "Medgen ID", "Dry-Run-1") == {}
 
     real_id, _ = baserow_api.synchronize_data(
@@ -993,6 +993,42 @@ def test_synchronize_data_exclude_fields(baserow_api, test_tables):
         target["id"],
         identifier_column="Medgen ID",
         exclude_fields=["Anmerkungen"],
+        fail_on_error=True,
+    )
+    entry = baserow_api.get_entry(target["id"], target_row)
+    assert entry["Aktiv"] is True
+    assert entry.get("Anmerkungen") in (None, "")
+
+    baserow_api._delete_row(source_id, source_row)
+    baserow_api.delete_table(target["id"])
+
+
+def test_synchronize_data_include_fields(baserow_api, test_tables):
+    database_id = test_tables["database_id"]
+    source_id = test_tables["writable"]["id"]
+    target = baserow_api.create_table(
+        database_id,
+        "sync_include_target",
+        primary_field_name="Medgen ID",
+        fields=[
+            {"name": "Anmerkungen", "type": "text"},
+            {"name": "Aktiv", "type": "boolean"},
+        ],
+    )
+    source_row = baserow_api.add_data(
+        source_id,
+        {
+            "Medgen ID": "Include-1",
+            "Anmerkungen": "only-id-and-aktiv",
+            "Aktiv": True,
+        },
+    )
+    target_row, _ = baserow_api.synchronize_data(
+        source_id,
+        source_row,
+        target["id"],
+        identifier_column="Medgen ID",
+        include_fields=["Medgen ID", "Aktiv"],
         fail_on_error=True,
     )
     entry = baserow_api.get_entry(target["id"], target_row)
