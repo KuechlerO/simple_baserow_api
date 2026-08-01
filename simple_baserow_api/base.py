@@ -1367,15 +1367,17 @@ class BaserowApi:
                     table_id, input_entries, user_field_names=user_field_names
                 )
             except requests.HTTPError as err:
-                if err.response is not None and err.response.status_code == 504:
-                    # Sleep for 60 seconds and retry
+                status = err.response.status_code if err.response is not None else None
+                # Batch endpoints sometimes return opaque HTML 500/502/504 for
+                # large or complex payloads; fall back to per-row writes.
+                if status in {500, 502, 503, 504}:
                     warnings.warn(
-                        f"Gateway Timeout: {err.response.text}. Retrying after 60 "
-                        f"seconds with single operations."
+                        f"Batch write failed with HTTP {status}: "
+                        f"{(err.response.text or '')[:300]!r}. "
+                        f"Retrying {len(input_entries)} row(s) individually.",
+                        stacklevel=2,
                     )
-                    time.sleep(60)
-                    # Retry the batch operation
-                    for entry in input_entries:  # Process each entry individually
+                    for entry in input_entries:
                         processed_ids.append(
                             single_operation(
                                 table_id,
@@ -1394,13 +1396,19 @@ class BaserowApi:
                 fail_on_error=fail_on_error,
             )
 
+        fields = self.get_fields(table_id)
+
         # Split entries into new and update. Copy each entry so later
         # mutations (e.g. inside update helpers) cannot affect the caller.
+        # Convert select labels → option IDs (same as add_data).
         entries_update, entries_new, errors, touched_ids = [], [], [], []
 
         for entry in entries:
             entry_copy = deepcopy(entry)
-            if entry_copy.get("id") is not None:
+            row_id = entry_copy.pop("id", None)
+            entry_copy = self._convert_selects(entry_copy, fields)
+            if row_id is not None:
+                entry_copy["id"] = row_id
                 entries_update.append(entry_copy)
             else:
                 entries_new.append(entry_copy)
